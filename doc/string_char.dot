@@ -1,0 +1,18 @@
+digraph string_char{
+a[label = "Start" shape="doublecircle"]
+b[label = "Literal"]
+c[label = "Literal Escape"]
+a->b[label="\""]
+b->b[label="[^\\\"]"]
+b->a[label="\""]
+b->c[label="\\"]
+c->b[label="Escape"]
+d[label = "Char"]
+e[label = "Char End"]
+f[label = "Char Escape"]
+a->d[label="\'"]
+e->a[label="\'"]
+d->e[label="[^\\\']"]
+d->f[label="\\"]
+f->e[label="Escape"]
+}

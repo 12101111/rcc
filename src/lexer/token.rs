@@ -15,7 +15,7 @@ macro_rules! token_enum {
     };
 }
 
-token_enum!{
+token_enum! {
     Token{
         Ident(String),
         KeyWord(KeyWord),
@@ -25,18 +25,12 @@ token_enum!{
     }
 }
 
-token_enum!{
+token_enum! {
     Constant {
-        Char(i8),
-        UChar(u8),
-        Short(i16),
-        UShort(u16),
-        Int(i32),
-        UInt(u32),
-        LLong(i64),
-        ULLong(u64),
-        Float(f32),
-        Double(f64)
+        Char(u8),
+        Int(i64),
+        UInt(u64),
+        Float(f64)
     }
 }
 
@@ -109,51 +103,64 @@ token! {
 
 token! {
     Symbol{
+        //Suffix is Equal =
         Assignment:"=",
+        Equal:"==",
+        LogicalNot:"!",
+        NotEqual:"!=",
+        Star:"*",
+        MultiAssign:"*=",
+        Mod:"%",
+        ModAssign:"%=",
+        Xor:"^",
+        XorAssign:"^=",
+
         Add:"+",
         Inc:"++",
         AddAssign:"+=",
+
         Sub:"-",
         Dec:"--",
         SubAssign:"-=",
-        Star:"*",
-        MultiAssign:"*=",
+        Arrow:"->",
+
         Divide:"/",
         DivAssign:"/=",
-        Mod:"%",
-        ModAssign:"%=",
-        LeftShift:"<<",
-        LeftShiftAssign:"<<=",
-        RightShift:">>",
-        RightShiftAssign:">>=",
-        And:"&",
-        AndAssign:"&=",
-        Or:"|",
-        OrAssign:"|=",
-        Xor:"^",
-        XorAssign:"^=",
-        Negation:"~",
-        LogicalNot:"!",
-        LogicalAnd:"&&",
-        LogicalOr:"||",
-        Equal:"==",
-        NotEqual:"!=",
+        OneLineComment:"//",
+        MultiLineComment:"/*",
+
         Less:"<",
         LessEqual:"<=",
+        LeftShift:"<<",
+        LeftShiftAssign:"<<=",
+
         Greater:">",
         GreaterEqual:">=",
+        RightShift:">>",
+        RightShiftAssign:">>=",
+
+        And:"&",
+        LogicalAnd:"&&",
+        AndAssign:"&=",
+
+        Or:"|",
+        LogicalOr:"||",
+        OrAssign:"|=",
+
+        Dot:".",
+        Ellipsis:"...",
+
+        //No Suffix
+        Negation:"~",
         Trinocular:"?",
         Colon:":",
-        Dot:".",
-        Arrow:"->",
         Comma:",",
         Semicolon:";",
-        Ellipsis:"...",
         LeftBrace:"{",
         RightBrace:"}",
-        LeftParen:"(",
-        RightParen:")",
         LeftBracket:"[",
-        RightBracket:"]"
+        RightBracket:"]",
+        LeftParen:"(",
+        RightParen:")"
     }
 }
