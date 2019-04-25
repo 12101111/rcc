@@ -1,0 +1,12 @@
+[package]
+name = "parser"
+version = "0.1.0"
+authors = ["12101111 <w12101111@gmail.com>"]
+edition = "2018"
+[lib]
+proc-macro = true
+path = "lib.rs"
+[dependencies]
+syn = { version = "*", features = ["full","extra-traits"] }
+proc-macro2 = { version = "*", features = ["nightly"] }
+quote = "*"

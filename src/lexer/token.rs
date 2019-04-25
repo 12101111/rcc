@@ -1,6 +1,6 @@
 macro_rules! token_enum {
     ($class:ident { $($name:ident($type:ty)),*}) => {
-        #[derive(Debug, PartialEq)]
+        #[derive(Clone,Debug, PartialEq)]
         pub enum $class{
             $($name($type),)*
         }
@@ -21,7 +21,8 @@ token_enum! {
         KeyWord(KeyWord),
         Symbol(Symbol),
         Constant(Constant),
-        Literal(String)
+        Literal(String),
+        Comment(String)
     }
 }
 
@@ -36,7 +37,7 @@ token_enum! {
 
 macro_rules! token {
     ($class:ident { $($name:ident:$value:expr),*}) => {
-        #[derive(Debug, PartialEq)]
+        #[derive(Clone,Copy,Debug,PartialEq)]
         pub enum $class{
             $($name,)*
         }
@@ -122,12 +123,12 @@ token! {
         Sub:"-",
         Dec:"--",
         SubAssign:"-=",
-        Arrow:"->",
+        Arrow:"->",//TODO:
 
         Divide:"/",
         DivAssign:"/=",
-        OneLineComment:"//",
-        MultiLineComment:"/*",
+        //OneLineComment:"//",
+        //MultiLineComment:"/*",
 
         Less:"<",
         LessEqual:"<=",
@@ -147,13 +148,13 @@ token! {
         LogicalOr:"||",
         OrAssign:"|=",
 
-        Dot:".",
-        Ellipsis:"...",
+        Dot:".",//TODO:
+        Ellipsis:"...",//TODO:
 
         //No Suffix
         Negation:"~",
-        Trinocular:"?",
-        Colon:":",
+        Trinocular:"?",//TODO:
+        Colon:":",//TODO:
         Comma:",",
         Semicolon:";",
         LeftBrace:"{",

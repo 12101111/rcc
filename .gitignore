@@ -4,3 +4,7 @@ Cargo.lock
 .vscode
 *.exe
 *.c
+ast.dot
+lr0fsm.dot
+table.csv
+grammer.txt
