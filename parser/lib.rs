@@ -371,10 +371,14 @@ impl Grammer {
                     }
                     let follow = &follow[self.rules[item.rule].lhs];
                     for f in &follow.0 {
-                        if actions[i][*f] == Action::Error {
-                            actions[i][*f] = Action::Reduce(item.rule)
-                        } else {
-                            panic!("Conflict!")
+                        match actions[i][*f] {
+                            Action::Error => actions[i][*f] = Action::Reduce(item.rule),
+                            Action::Reduce(_) | Action::Accept => {
+                                panic!("Reduce-Reduce Conflict at ACTION[{}][{}]", i, *f)
+                            }
+                            Action::Shift(_) => {
+                                panic!("Shift-Reduce Conflict at ACTION[{}][{}]", i, *f)
+                            }
                         }
                     }
                     if follow.1 {

@@ -1,34 +1,35 @@
-#include <stdio.h>
-typedef struct a
+int ans = 1 + 2;
+void test(int ans2);
+int test2(int ans);
+int main(void)
 {
-    int x;
-    float y;
-} pos;
-// some comment
-/* more comment ***********/
-int main()
-{
-    int h = 0x1f;
-    int o = 0; /* more
-    more
-    comment *******
-    ****/
+    int ans2 = 3 * 2 + 1;
+    ans2 = ans;
+    test(ans2);
+    if (ans2 == 7)
+    {
+        return (-1);
+    }
+    else if (ans2 == 8)
+    {
+        return (-2);
+    }
+    else
+    {
+        while (ans2 >= 0)
+        {
+            ans2 = ans2 - 1;
+        }
+        return test2(ans2);
+    }
+}
 
-    double f = 5.;
-    double g = .5;
-    pos m5;
-    char a = 'a\
-\
-\
-\
-\
-\
-\
-';
-    m5.x = 1;
-    m5.y = .5;
-    printf("%d\
-,%f",
-           m5.x, m5.y);
-    return 0;
+void test(int ans2)
+{
+    ans2 = 8;
+}
+
+int test2(int ans)
+{
+    return ans + 1;
 }
