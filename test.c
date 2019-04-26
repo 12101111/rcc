@@ -8,11 +8,11 @@ int main(void)
     test(ans2);
     if (ans2 == 7)
     {
-        return (-1);
+        return -1;
     }
     else if (ans2 == 8)
     {
-        return (-2);
+        return -2;
     }
     else
     {

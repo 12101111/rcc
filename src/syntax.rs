@@ -36,6 +36,8 @@ parser! {
         TypedParaList[TypedParameter,TypedParaListSuffix],
         TypedParaListSuffix[Symbol(Comma),TypedParaList],
         TypedParaListSuffix[],
+        //FIXME: Lexer has bug
+        TypedParaListSuffix[Symbol(Comma),Symbol(Ellipsis)],
         TypedParameter[Type,Ident(_)],
         Statements[Statement,Statements],
         Statements[],
@@ -60,6 +62,56 @@ parser! {
         Assignment[LValue,AssignOperator,Expression],
         //TODO: struct enum union pointer
         LValue[Ident(_)],
+        Expression[ExprElem,ExprSuffix],
+        ExprSuffix[],
+        ExprSuffix[BinOperator,Expression],
+        ExprElem[ConstantValue],
+        ExprElem[Ident(_)],
+        ExprElem[Symbol(LeftParen),Expression,Symbol(RightParen)],
+        ExprElem[Funcall],
+        ExprElem[MonoOperator,Ident(_)],
+        ExprElem[MonoOperator,ConstantValue],
+        ExprElem[MonoOperator,Symbol(LeftParen),Expression,Symbol(RightParen)],
+        ConstantValue[Constant(_)],
+        ConstantValue[Literal(_)],
+        // TODO: [] () . ->
+        // FIXME: 2 ! ~ - ++ --
+        // TODO: * depointer  sizeof & getaddress (TYPE)
+        MonoOperator[Symbol(LogicalNot)],
+        MonoOperator[Symbol(Negation)],
+        MonoOperator[Symbol(Sub)],
+        MonoOperator[Symbol(Inc)],
+        MonoOperator[Symbol(Dec)],
+        // FIXME: 3 * % /
+        BinOperator[Symbol(Star)],
+        BinOperator[Symbol(Mod)],
+        BinOperator[Symbol(Divide)],
+        // FIXME: 4 + -
+        BinOperator[Symbol(Add)],
+        BinOperator[Symbol(Sub)],
+        // FIXME: 5 << >>
+        BinOperator[Symbol(LeftShift)],
+        BinOperator[Symbol(RightShift)],
+        // FIXME: 6 < <= > >=
+        BinOperator[Symbol(Less)],
+        BinOperator[Symbol(LessEqual)],
+        BinOperator[Symbol(Greater)],
+        BinOperator[Symbol(GreaterEqual)],
+        // FIXME: 7 == !=
+        BinOperator[Symbol(Equal)],
+        BinOperator[Symbol(NotEqual)],
+        // FIXME: 8 &
+        BinOperator[Symbol(And)],
+        // FIXME: 9 ^
+        BinOperator[Symbol(Xor)],
+        // FIXME: 10 |
+        BinOperator[Symbol(Or)],
+        // FIXME: 11 &&
+        BinOperator[Symbol(LogicalAnd)],
+        // FIXME: 12 ||
+        BinOperator[Symbol(LogicalOr)],
+        //TODO: 13 Symbol(Trinocular) Symbol(Colon)
+        //14
         AssignOperator[Symbol(Assignment)],
         AssignOperator[Symbol(MultiAssign)],
         AssignOperator[Symbol(ModAssign)],
@@ -70,41 +122,8 @@ parser! {
         AssignOperator[Symbol(LeftShiftAssign)],
         AssignOperator[Symbol(RightShiftAssign)],
         AssignOperator[Symbol(AndAssign)],
-        AssignOperator[Symbol(OrAssign)],
-        Expression[ExprElem,ExprSuffix],
-        ExprSuffix[],
-        ExprSuffix[BinOperator,Expression],
-        ExprElem[ConstantValue],
-        ExprElem[Ident(_)],
-        ExprElem[Symbol(LeftParen),Expression,Symbol(RightParen)],
-        ExprElem[Funcall],
-        ExprElem[Symbol(LeftParen),MonoOperator,Expression,Symbol(RightParen)],
-        MonoOperator[Symbol(LogicalNot)],
-        MonoOperator[Symbol(Negation)],
-        MonoOperator[Symbol(Add)],
-        MonoOperator[Symbol(Sub)],
-        MonoOperator[Symbol(Inc)],
-        MonoOperator[Symbol(Dec)],
-        BinOperator[Symbol(Equal)],
-        BinOperator[Symbol(NotEqual)],
-        BinOperator[Symbol(Star)],
-        BinOperator[Symbol(Mod)],
-        BinOperator[Symbol(Xor)],
-        BinOperator[Symbol(Add)],
-        BinOperator[Symbol(Sub)],
-        BinOperator[Symbol(Divide)],
-        BinOperator[Symbol(Less)],
-        BinOperator[Symbol(LessEqual)],
-        BinOperator[Symbol(LeftShift)],
-        BinOperator[Symbol(Greater)],
-        BinOperator[Symbol(GreaterEqual)],
-        BinOperator[Symbol(RightShift)],
-        BinOperator[Symbol(And)],
-        BinOperator[Symbol(LogicalAnd)],
-        BinOperator[Symbol(Or)],
-        BinOperator[Symbol(LogicalOr)],
-        ConstantValue[Constant(_)],
-        ConstantValue[Literal(_)]
+        AssignOperator[Symbol(OrAssign)]
+        // TODO: 15 , Symbol(Comma)
     }
 }
 

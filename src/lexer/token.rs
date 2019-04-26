@@ -123,7 +123,7 @@ token! {
         Sub:"-",
         Dec:"--",
         SubAssign:"-=",
-        Arrow:"->",//TODO:
+        Arrow:"->",
 
         Divide:"/",
         DivAssign:"/=",
@@ -148,13 +148,13 @@ token! {
         LogicalOr:"||",
         OrAssign:"|=",
 
-        Dot:".",//TODO:
-        Ellipsis:"...",//TODO:
+        Dot:".",
+        Ellipsis:"...",
 
         //No Suffix
         Negation:"~",
-        Trinocular:"?",//TODO:
-        Colon:":",//TODO:
+        Trinocular:"?",
+        Colon:":",
         Comma:",",
         Semicolon:";",
         LeftBrace:"{",
