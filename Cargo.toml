@@ -10,7 +10,7 @@ homepage = "https://github.com/12101111/rcc"
 edition = "2018"
 
 [dependencies]
-parser = { path = "./parser"}
+parser = { path = "./parser" ,features = ["slr"]}
 
 [workspace]
 members = [

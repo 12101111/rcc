@@ -10,3 +10,8 @@ path = "lib.rs"
 syn = { version = "*", features = ["full","extra-traits"] }
 proc-macro2 = { version = "*", features = ["nightly"] }
 quote = "*"
+cfg-if = "0.1"
+[features]
+slr = []
+lr1 = []
+lalr = []

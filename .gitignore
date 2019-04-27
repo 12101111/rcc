@@ -6,5 +6,9 @@ Cargo.lock
 *.c
 ast.dot
 lr0fsm.dot
-table.csv
+lr1fsm.dot
+lr1.csv
+slr.csv
+core_lr0fsm.dot
 grammer.txt
+*.pdf
