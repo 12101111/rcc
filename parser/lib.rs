@@ -1,6 +1,7 @@
-#![recursion_limit = "1024"]
+#![recursion_limit = "2048"]
 extern crate proc_macro;
 
+use cfg_if::cfg_if;
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use quote::quote;
@@ -9,21 +10,39 @@ use std::io::Write;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{braced, bracketed, parse_macro_input, token, Pat, PatTupleStruct, Result, Token};
-use cfg_if::cfg_if;
 
-struct GrammerTokens {
+struct GrammarTokens {
     start: Ident,
     _brace_token: token::Brace,
-    rules: Punctuated<RuleTokens, Token![,]>,
+    rules: Punctuated<RuleTokens, Token![;]>,
 }
 
-impl Parse for GrammerTokens {
+impl Parse for GrammarTokens {
     fn parse(input: ParseStream) -> Result<Self> {
         let content;
-        Ok(GrammerTokens {
+        Ok(GrammarTokens {
             start: input.parse()?,
             _brace_token: braced!(content in input),
             rules: content.parse_terminated(RuleTokens::parse)?,
+        })
+    }
+}
+
+struct RuleTokens {
+    lhs: Ident,
+    _arrow: Token![->],
+    _bracket_token: token::Bracket,
+    rhs: Punctuated<Pat, Token![,]>,
+}
+
+impl Parse for RuleTokens {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let content;
+        Ok(RuleTokens {
+            lhs: input.parse()?,
+            _arrow: input.parse()?,
+            _bracket_token: bracketed!(content in input),
+            rhs: content.parse_terminated(Pat::parse)?,
         })
     }
 }
@@ -48,8 +67,8 @@ where
     }
 }
 
-impl GrammerTokens {
-    pub fn to_grammer(self) -> Grammer {
+impl GrammarTokens {
+    pub fn into_grammar(self) -> Grammar {
         let mut nt_map = HashMap::new();
         let mut nt = Vec::new();
         let mut t_map = HashMap::new();
@@ -84,49 +103,36 @@ impl GrammerTokens {
             },
         };
         rules.insert(0, rule);
-        Grammer { rules, nt, t }
-    }
-}
-
-struct RuleTokens {
-    lhs: Ident,
-    _bracket_token: token::Bracket,
-    rhs: Punctuated<Pat, Token![,]>,
-}
-
-impl Parse for RuleTokens {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let content;
-        Ok(RuleTokens {
-            lhs: input.parse()?,
-            _bracket_token: bracketed!(content in input),
-            rhs: content.parse_terminated(Pat::parse)?,
-        })
+        Grammar { rules, nt, t }
     }
 }
 
 cfg_if! {
-    if #[cfg(feature="lr1")]{    
+    if #[cfg(feature="lr1")]{
         #[proc_macro]
         pub fn parser(tokens: TokenStream) -> TokenStream {
-            parse_macro_input!(tokens as GrammerTokens).to_grammer().lr1()
+            parse_macro_input!(tokens as GrammarTokens).into_grammar().lr1()
         }
     } else if #[cfg(feature="slr")]{
         #[proc_macro]
         pub fn parser(tokens: TokenStream) -> TokenStream {
-            parse_macro_input!(tokens as GrammerTokens).to_grammer().slr()
+            parse_macro_input!(tokens as GrammarTokens).into_grammar().slr()
         }
     } else if #[cfg(feature="lalr")]{
         #[proc_macro]
         pub fn parser(tokens: TokenStream) -> TokenStream {
-            parse_macro_input!(tokens as GrammerTokens).to_grammer().lalr();
+            parse_macro_input!(tokens as GrammarTokens).into_grammar().lalr();
             unimplemented!()
+        }
+    } else{
+        #[proc_macro]
+        pub fn parser(tokens: TokenStream) -> TokenStream {
+            panic!("Select a feature to use!")
         }
     }
 }
 
-
-struct Grammer {
+struct Grammar {
     // 第0条规则总为_START->起点
     rules: Vec<Rule>,
     nt: Vec<Ident>,
@@ -144,12 +150,12 @@ enum Sym {
     T(usize),
 }
 
-fn format_sym(sym: Sym, grammer: &Grammer) -> String {
+fn format_sym(sym: Sym, grammar: &Grammar) -> String {
     match sym {
-        Sym::NT(k) => format(grammer.nt[k].clone()),
+        Sym::NT(k) => format(grammar.nt[k].clone()),
         Sym::T(k) => {
-            if k < grammer.t.len() {
-                format(grammer.t[k].clone())
+            if k < grammar.t.len() {
+                format(grammar.t[k].clone())
             } else {
                 format!("$")
             }
@@ -178,7 +184,7 @@ impl std::fmt::Display for Action {
     }
 }
 
-#[cfg(any(feature="slr",feature="lalr"))]
+#[cfg(any(feature = "slr", feature = "lalr"))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
 struct LR0Item {
     /// 产生式在Grammar的位置
@@ -187,15 +193,15 @@ struct LR0Item {
     pub pos: usize,
 }
 
-#[cfg(any(feature="slr",feature="lalr"))]
+#[cfg(any(feature = "slr", feature = "lalr"))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 struct LR0ItemSet(Vec<LR0Item>);
 
-#[cfg(any(feature="slr",feature="lalr"))]
+#[cfg(any(feature = "slr", feature = "lalr"))]
 #[derive(Clone)]
 struct LR0FSM(Vec<(LR0ItemSet, BTreeMap<Sym, usize>)>);
 
-#[cfg(any(feature="lr1",feature="lalr"))]
+#[cfg(any(feature = "lr1", feature = "lalr"))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
 struct LR1Item {
     /// 产生式在Grammar的位置
@@ -209,17 +215,17 @@ struct LR1Item {
     pub la: usize,
 }
 
-#[cfg(any(feature="lr1",feature="lalr"))]
+#[cfg(any(feature = "lr1", feature = "lalr"))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone)]
 struct LR1ItemSet(Vec<LR1Item>);
 
-#[cfg(any(feature="lr1",feature="lalr"))]
+#[cfg(any(feature = "lr1", feature = "lalr"))]
 #[derive(Clone)]
 struct LR1FSM(Vec<(LR1ItemSet, BTreeMap<Sym, usize>)>);
 
-impl Grammer {
+impl Grammar {
     fn print(&self) -> std::io::Result<()> {
-        let mut f = std::fs::File::create("grammer.txt")?;
+        let mut f = std::fs::File::create("grammar.txt")?;
         write!(f, "Nonterminal:\n")?;
         for i in &self.nt {
             write!(f, "{} ", i)?;
@@ -239,7 +245,7 @@ impl Grammer {
         Ok(())
     }
 
-    fn gencode(&self, actions: Vec<Vec<Action>>, gotos: Vec<Vec<Option<usize>>>) -> TokenStream {
+    fn gen_code(&self, actions: Vec<Vec<Action>>, gotos: Vec<Vec<Option<usize>>>) -> TokenStream {
         let nts: Vec<_> = self.nt.clone();
         let nt: Vec<_> = self.nt.clone();
         let actions: Vec<_> = actions
@@ -276,7 +282,7 @@ impl Grammer {
             const LHS:&[usize] = &[#(#lhs),*];
             const LENS:&[usize] = &[#(#lens),*];
             const TERMINAL_NUM:usize = #empty;
-            #[derive(Debug,Clone,Copy)]
+            #[derive(PartialEq, Eq,Debug,Clone,Copy)]
             pub enum Nonterminal{
                 #(#nts),*
             }
@@ -338,7 +344,7 @@ impl Grammer {
         ans
     }
 
-    #[cfg(feature="slr")]
+    #[cfg(feature = "slr")]
     fn follow_set(&self, first_set: Vec<(BTreeSet<usize>, bool)>) -> Vec<(BTreeSet<usize>, bool)> {
         let mut ans: Vec<_> = (0..self.nt.len())
             .map(|_| (BTreeSet::new(), false))
@@ -388,7 +394,7 @@ impl Grammer {
         ans
     }
 
-    #[cfg(any(feature="slr",feature="lalr"))]
+    #[cfg(any(feature = "slr", feature = "lalr"))]
     fn lr0_closure(&self, core: &LR0ItemSet) -> LR0ItemSet {
         let mut closure: BTreeSet<_> = core.0.iter().cloned().collect();
         let mut to_add: VecDeque<_> = core.0.iter().cloned().collect();
@@ -410,7 +416,7 @@ impl Grammer {
         LR0ItemSet(item_set)
     }
 
-    #[cfg(any(feature="slr",feature="lalr"))]
+    #[cfg(any(feature = "slr", feature = "lalr"))]
     fn lr0fsm(&self) -> LR0FSM {
         let mut states = Vec::new();
         let mut states_map = BTreeMap::new();
@@ -461,18 +467,17 @@ impl Grammer {
         LR0FSM(states)
     }
 
-    #[cfg(feature="slr")]
+    #[cfg(feature = "slr")]
     fn slr(&self) -> TokenStream {
         println!("Using SLR");
         self.print().unwrap();
         let first = self.first_set();
-        println!("FIRST:");
-        print_set(&first, self);
-        println!("FOLLOW:");
+        print_set(&first, self, "first_set.txt").unwrap();
         let follow = self.follow_set(first);
-        print_set(&follow, self);
+        print_set(&follow, self, "follow_set.txt").unwrap();
         let lr0fsm = self.lr0fsm();
         lr0fsm.draw(self, "lr0fsm.dot").unwrap();
+        let core = lr0fsm.clone().into_core_items().0;
         let mut actions: Vec<Vec<_>> = (0..lr0fsm.0.len())
             .map(|_| (0..self.t.len() + 1).map(|_| Action::Error).collect())
             .collect();
@@ -496,12 +501,24 @@ impl Grammer {
                     for f in &follow.0 {
                         match actions[i][*f] {
                             Action::Error => actions[i][*f] = Action::Reduce(item.rule),
-                            Action::Reduce(_) | Action::Accept => {
-                                panic!("Reduce-Reduce Conflict at ACTION[{}][{}]", i, *f)
-                            }
-                            Action::Shift(_) => {
-                                panic!("Shift-Reduce Conflict at ACTION[{}][{}]", i, *f)
-                            }
+                            Action::Reduce(j) => panic!(
+                                "Reduce-Reduce Conflict at ACTION[{}][{}], input:{}, old:R{}, new:R{}, actions:{:?}",
+                                i, *f, format(self.t[*f].clone()), j, item.rule,actions
+                            ),
+                            Action::Shift(j) => {
+                                let shift = &(core[j].0).0;
+                                if shift.len() == 1 {
+                                    if item.rule <= shift[0].rule{
+                                        actions[i][*f] = Action::Reduce(item.rule);
+                                    }
+                                }else{
+                                    panic!(
+                                        "Shift-Reduce Conflict at ACTION[{}][{}], input:{}, old:S{}, new:R{}, actions:{:?}",
+                                        i, *f, format(self.t[*f].clone()), j, item.rule,actions
+                                    );
+                                }
+                            },
+                            Action::Accept => unreachable!(),
                         }
                     }
                     if follow.1 {
@@ -511,10 +528,10 @@ impl Grammer {
             }
         }
         print_table(&actions, &gotos, self, "slr.csv").unwrap();
-        self.gencode(actions, gotos)
+        self.gen_code(actions, gotos)
     }
 
-    #[cfg(any(feature="lr1",feature="lalr"))]
+    #[cfg(any(feature = "lr1", feature = "lalr"))]
     fn lr1_closure(
         &self,
         first_set: &Vec<(BTreeSet<usize>, bool)>,
@@ -559,14 +576,13 @@ impl Grammer {
         LR1ItemSet(item_set)
     }
 
-    #[cfg(any(feature="lr1",feature="lalr"))]
+    #[cfg(any(feature = "lr1", feature = "lalr"))]
     fn lr1fsm(&self) -> LR1FSM {
         let mut states = Vec::new();
         let mut states_map = BTreeMap::new();
         let mut core_items = BTreeMap::new();
         let first_set = self.first_set();
-        println!("FIRST:");
-        print_set(&first_set, self);
+        print_set(&first_set, self, "first_set.txt").unwrap();
         // 初始项目0
         let cores0 = LR1ItemSet(vec![LR1Item {
             rule: 0,
@@ -618,7 +634,7 @@ impl Grammer {
         LR1FSM(states)
     }
 
-    #[cfg(feature="lr1")]
+    #[cfg(feature = "lr1")]
     fn lr1(&self) -> TokenStream {
         println!("Using LR(1)");
         self.print().unwrap();
@@ -647,24 +663,38 @@ impl Grammer {
                     let f = item.la;
                     match actions[i][f] {
                         Action::Error => actions[i][f] = Action::Reduce(item.rule),
-                        Action::Reduce(_) | Action::Accept => {
-                            panic!("Reduce-Reduce Conflict at ACTION[{}][{}]", i, f)
-                        }
-                        Action::Shift(_) => panic!("Shift-Reduce Conflict at ACTION[{}][{}]", i, f),
+                        Action::Reduce(j) => panic!(
+                            "Reduce-Reduce Conflict at ACTION[{}][{}], input:{}, old:R{}, new:R{}, actions:{:?}",
+                            i, f, format(self.t[f].clone()), j, item.rule,actions
+                        ),
+                        Action::Shift(j) => {
+                            let shift = &(core[j].0).0;
+                            if shift.len() == 1 {
+                                if item.rule <= shift[0].rule{
+                                    actions[i][f] = Action::Reduce(item.rule);
+                                }
+                            }else{
+                                panic!(
+                                    "Shift-Reduce Conflict at ACTION[{}][{}], input:{}, old:S{}, new:R{}, actions:{:?}",
+                                    i, f, format(self.t[f].clone()), j, item.rule,actions
+                                );
+                            }
+                        },
+                        Action::Accept => unreachable!(),
                     }
                 }
             }
         }
         print_table(&actions, &gotos, self, "lr1.csv").unwrap();
-        self.gencode(actions, gotos)
+        self.gen_code(actions, gotos)
     }
 
-    #[cfg(feature="lalr")]
+    #[cfg(feature = "lalr")]
     fn lalr(&self) {
         println!("Using LALR(1)");
         let lr0fsm = self.lr0fsm();
-        let core = lr0fsm.to_core_items().0;
-        //core.draw(self,"core_lr0fsm").unwrap();
+        let core = lr0fsm.into_core_items().0;
+        //core.draw(self,"core_lr0fsm.dot").unwrap();
         let first_set = self.first_set();
         let table: Vec<Vec<BTreeSet<usize>>> = core
             .iter()
@@ -697,15 +727,16 @@ impl Grammer {
 fn print_table(
     actions: &Vec<Vec<Action>>,
     gotos: &Vec<Vec<Option<usize>>>,
-    grammer: &Grammer,
+    grammar: &Grammar,
     filename: &str,
 ) -> std::io::Result<()> {
     let mut f = std::fs::File::create(filename)?;
     write!(f, "S,")?;
-    for t in &grammer.t {
+    for t in &grammar.t {
         write!(f, "{},", format(t))?;
     }
-    for nt in &grammer.nt {
+    write!(f, "$,")?;
+    for nt in &grammar.nt {
         write!(f, "{},", nt)?;
     }
     write!(f, "\n")?;
@@ -725,23 +756,29 @@ fn print_table(
     Ok(())
 }
 
-fn print_set(set: &Vec<(BTreeSet<usize>, bool)>, grammer: &Grammer) {
+fn print_set(
+    set: &Vec<(BTreeSet<usize>, bool)>,
+    grammar: &Grammar,
+    filename: &str,
+) -> std::io::Result<()> {
+    let mut f = std::fs::File::create(filename)?;
     for (id, (set, empty)) in set.iter().enumerate() {
-        print!("{}:{{ ", grammer.nt[id]);
+        write!(f, "{}:{{ ", grammar.nt[id])?;
         for i in set.iter() {
-            print!("{}, ", format(&grammer.t[*i]));
+            write!(f, "{}, ", format(&grammar.t[*i]))?;
         }
         if *empty {
-            print!("ε ")
+            write!(f, "ε ")?;
         }
-        println!("}}");
+        write!(f, "}}\n")?;
     }
+    Ok(())
 }
 
-#[cfg(any(feature="slr",feature="lalr"))]
+#[cfg(any(feature = "slr", feature = "lalr"))]
 impl LR0FSM {
     /// Print the state machine in graphviz format.
-    pub fn draw(&self, grammer: &Grammer, filename: &str) -> std::io::Result<()> {
+    pub fn draw(&self, grammar: &Grammar, filename: &str) -> std::io::Result<()> {
         let mut f = std::fs::File::create(filename)?;
         write!(
             f,
@@ -750,14 +787,14 @@ impl LR0FSM {
         for (i, &(ref item_set, ref trans)) in self.0.iter().enumerate() {
             write!(f, "s{}[label=\"s{}\\n", i, i)?;
             for item in item_set.0.iter() {
-                let rule = &grammer.rules[item.rule];
-                write!(f, "{}->", grammer.nt[rule.lhs])?;
+                let rule = &grammar.rules[item.rule];
+                write!(f, "{}->", grammar.nt[rule.lhs])?;
                 for j in 0..item.pos {
-                    write!(f, "{} ", format_sym(rule.rhs[j], grammer))?;
+                    write!(f, "{} ", format_sym(rule.rhs[j], grammar))?;
                 }
                 write!(f, ".")?;
                 for j in item.pos..rule.rhs.len() {
-                    write!(f, "{} ", format_sym(rule.rhs[j], grammer))?;
+                    write!(f, "{} ", format_sym(rule.rhs[j], grammar))?;
                 }
                 write!(f, "\\n")?;
             }
@@ -768,7 +805,7 @@ impl LR0FSM {
                     "s{} -> s{} [label=<{}>]\n",
                     i,
                     target,
-                    format_sym(sym, grammer)
+                    format_sym(sym, grammar)
                 )?;
             }
         }
@@ -776,8 +813,7 @@ impl LR0FSM {
         Ok(())
     }
 
-    #[cfg(feature="lalr")]
-    pub fn to_core_items(self) -> LR0FSM {
+    pub fn into_core_items(self) -> LR0FSM {
         let states = self
             .0
             .into_iter()
@@ -790,9 +826,9 @@ impl LR0FSM {
     }
 }
 
-#[cfg(any(feature="lr1",feature="lalr"))]
+#[cfg(any(feature = "lr1", feature = "lalr"))]
 impl LR1FSM {
-    pub fn draw(&self, grammer: &Grammer, filename: &str) -> std::io::Result<()> {
+    pub fn draw(&self, grammer: &Grammar, filename: &str) -> std::io::Result<()> {
         let mut f = std::fs::File::create(filename)?;
         write!(
             f,
@@ -828,8 +864,8 @@ impl LR1FSM {
         write!(f, "}}\n")?;
         Ok(())
     }
-    #[cfg(feature="lalr")]
-    pub fn to_lalr(self){
+    #[cfg(feature = "lalr")]
+    pub fn into_lalr(self) {
         //TODO:
         unimplemented!()
     }

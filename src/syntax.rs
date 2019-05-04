@@ -8,122 +8,120 @@ use std::io::Write;
 
 parser! {
     Program{
-        Program[Declaration,Program],
-        Program[],
-        Declaration[VarDecl,Symbol(Semicolon)],
-        Declaration[FuncDecl],
-        Declaration[FuncDef],
-        VarDecl[Type,VarDeclList],
-        VarDeclList[VarDeclElem,VarDeclSuffix],
-        VarDeclSuffix[Symbol(Comma),VarDeclList],
-        VarDeclSuffix[],
-        VarDeclElem[DeclVar],
-        VarDeclElem[DeclVarAssign],
-        DeclVar[Ident(_)],
-        DeclVarAssign[Ident(_),Symbol(Assignment),Expression],
-        //TODO:
-        Type[KeyWord(Char)],
-        Type[KeyWord(Double)],
-        Type[KeyWord(Float)],
-        Type[KeyWord(Int)],
-        Type[KeyWord(Void)],
-        FuncDecl[FuncDePrefix,Symbol(Semicolon)],
-        FuncDef[FuncDePrefix,Symbol(LeftBrace),Statements,Symbol(RightBrace)],
-        FuncDePrefix[Type,Ident(_),Symbol(LeftParen),TypedParameters,Symbol(RightParen)],
-        TypedParameters[],
-        TypedParameters[KeyWord(Void)],
-        TypedParameters[TypedParaList],
-        TypedParaList[TypedParameter,TypedParaListSuffix],
-        TypedParaListSuffix[Symbol(Comma),TypedParaList],
-        TypedParaListSuffix[],
-        //FIXME: Lexer has bug
-        TypedParaListSuffix[Symbol(Comma),Symbol(Ellipsis)],
-        TypedParameter[Type,Ident(_)],
-        Statements[Statement,Statements],
-        Statements[],
-        Statement[VarDecl,Symbol(Semicolon)],
-        Statement[Funcall,Symbol(Semicolon)],
-        Statement[Return,Symbol(Semicolon)],
-        Statement[IfBlock],
-        Statement[WhileBlock],
-        Statement[Assignment,Symbol(Semicolon)],
-        Funcall[Ident(_),Symbol(LeftParen),Parameters,Symbol(RightParen)],
-        Parameters[],
-        Parameters[ParaList],
-        ParaList[Expression,ParaListSuffix],
-        ParaListSuffix[Symbol(Comma),ParaList],
-        ParaListSuffix[],
-        Return[KeyWord(Return),Expression],
-        IfBlock[KeyWord(If),Symbol(LeftParen),Expression,Symbol(RightParen),Symbol(LeftBrace),Statements,Symbol(RightBrace),ElseBlock],
-        ElseBlock[],
-        ElseBlock[KeyWord(Else),Symbol(LeftBrace),Statements,Symbol(RightBrace)],
-        ElseBlock[KeyWord(Else),IfBlock],
-        WhileBlock[KeyWord(While),Symbol(LeftParen),Expression,Symbol(RightParen),Symbol(LeftBrace),Statements,Symbol(RightBrace)],
-        Assignment[LValue,AssignOperator,Expression],
-        //TODO: struct enum union pointer
-        LValue[Ident(_)],
-        Expression[ExprElem,ExprSuffix],
-        ExprSuffix[],
-        ExprSuffix[BinOperator,Expression],
-        ExprElem[ConstantValue],
-        ExprElem[Ident(_)],
-        ExprElem[Symbol(LeftParen),Expression,Symbol(RightParen)],
-        ExprElem[Funcall],
-        ExprElem[MonoOperator,Ident(_)],
-        ExprElem[MonoOperator,ConstantValue],
-        ExprElem[MonoOperator,Symbol(LeftParen),Expression,Symbol(RightParen)],
-        ConstantValue[Constant(_)],
-        ConstantValue[Literal(_)],
-        // TODO: [] () . ->
-        // FIXME: 2 ! ~ - ++ --
-        // TODO: * depointer  sizeof & getaddress (TYPE)
-        MonoOperator[Symbol(LogicalNot)],
-        MonoOperator[Symbol(Negation)],
-        MonoOperator[Symbol(Sub)],
-        MonoOperator[Symbol(Inc)],
-        MonoOperator[Symbol(Dec)],
-        // FIXME: 3 * % /
-        BinOperator[Symbol(Star)],
-        BinOperator[Symbol(Mod)],
-        BinOperator[Symbol(Divide)],
-        // FIXME: 4 + -
-        BinOperator[Symbol(Add)],
-        BinOperator[Symbol(Sub)],
-        // FIXME: 5 << >>
-        BinOperator[Symbol(LeftShift)],
-        BinOperator[Symbol(RightShift)],
-        // FIXME: 6 < <= > >=
-        BinOperator[Symbol(Less)],
-        BinOperator[Symbol(LessEqual)],
-        BinOperator[Symbol(Greater)],
-        BinOperator[Symbol(GreaterEqual)],
-        // FIXME: 7 == !=
-        BinOperator[Symbol(Equal)],
-        BinOperator[Symbol(NotEqual)],
-        // FIXME: 8 &
-        BinOperator[Symbol(And)],
-        // FIXME: 9 ^
-        BinOperator[Symbol(Xor)],
-        // FIXME: 10 |
-        BinOperator[Symbol(Or)],
-        // FIXME: 11 &&
-        BinOperator[Symbol(LogicalAnd)],
-        // FIXME: 12 ||
-        BinOperator[Symbol(LogicalOr)],
-        //TODO: 13 Symbol(Trinocular) Symbol(Colon)
-        //14
-        AssignOperator[Symbol(Assignment)],
-        AssignOperator[Symbol(MultiAssign)],
-        AssignOperator[Symbol(ModAssign)],
-        AssignOperator[Symbol(XorAssign)],
-        AssignOperator[Symbol(AddAssign)],
-        AssignOperator[Symbol(SubAssign)],
-        AssignOperator[Symbol(DivAssign)],
-        AssignOperator[Symbol(LeftShiftAssign)],
-        AssignOperator[Symbol(RightShiftAssign)],
-        AssignOperator[Symbol(AndAssign)],
-        AssignOperator[Symbol(OrAssign)]
-        // TODO: 15 , Symbol(Comma)
+        Program->[Declaration,Program];
+        Program->[];
+        Declaration->[VarDecl,Symbol(Semicolon)];
+        Declaration->[FuncDef,Symbol(Semicolon)];
+        Declaration->[FuncDef,Symbol(LeftBrace),Statements,Symbol(RightBrace)];
+
+        VarDecl->[Type,VarDeclList];
+        VarDeclList->[VarDeclElem];
+        VarDeclList->[VarDeclElem,Symbol(Comma),VarDeclList];
+        VarDeclElem->[Ident(_)];
+        VarDeclElem->[Ident(_),Symbol(Assignment),Expression];
+
+        FuncDef->[Type,Ident(_),Symbol(LeftParen),TypedParameters,Symbol(RightParen)];
+        TypedParameters->[];
+        TypedParameters->[KeyWord(Void)];
+        TypedParameters->[TypedParaList];
+        TypedParaList->[TypedParameter];
+        TypedParaList->[TypedParameter,Symbol(Comma),TypedParaList];
+        //TypedParaList->[Symbol(Ellipsis)]; //This is for va_list
+        TypedParameter->[Type,Ident(_)];
+
+        //TODO: other type
+        Type->[KeyWord(Char)];
+        Type->[KeyWord(Double)];
+        Type->[KeyWord(Float)];
+        Type->[KeyWord(Int)];
+        Type->[KeyWord(Void)];
+
+        Statements->[Statement,Statements];
+        Statements->[];
+        Statement->[VarDecl,Symbol(Semicolon)];
+        Statement->[Funcall,Symbol(Semicolon)];
+        Statement->[KeyWord(Return),Expression,Symbol(Semicolon)];
+        Statement->[IfBlock];
+        Statement->[KeyWord(While),Symbol(LeftParen),Expression,Symbol(RightParen),Symbol(LeftBrace),Statements,Symbol(RightBrace)];
+        Statement->[KeyWord(Do),Symbol(LeftBrace),Statements,Symbol(RightBrace),KeyWord(While),Symbol(LeftParen),Expression,Symbol(RightParen),Symbol(Semicolon)];
+        Statement->[LValue,AssignOperator,Expression,Symbol(Semicolon)];
+
+        Funcall->[Ident(_),Symbol(LeftParen),Parameters,Symbol(RightParen)];
+        Parameters->[];
+        Parameters->[ParaList];
+        ParaList->[Expression];
+        ParaList->[Expression,Symbol(Comma),ParaList];
+
+        IfBlock->[KeyWord(If),Symbol(LeftParen),Expression,Symbol(RightParen),Symbol(LeftBrace),Statements,Symbol(RightBrace),ElseBlock];
+        ElseBlock->[];
+        ElseBlock->[KeyWord(Else),Symbol(LeftBrace),Statements,Symbol(RightBrace)];
+        ElseBlock->[KeyWord(Else),IfBlock];
+
+        //TODO: struct enum union
+        LValue->[Ident(_)];
+        LValue->[Ident(_),Symbol(Dot),Ident(_)];
+        LValue->[Ident(_),Symbol(Arrow),Ident(_)];
+        LValue->[Ident(_),Symbol(LeftBracket),Expression,Symbol(RightBracket)];
+        LValue->[Symbol(Star),Ident(_)];
+        Elem->[LValue];
+        Elem->[Constant(_)];
+        Elem->[Symbol(LeftParen),Expression,Symbol(RightParen)];
+        Elem->[Funcall];
+        Expression->[Elem];
+        // 1: ! ~ - ++ -- & sizeof
+        Expression->[Symbol(LogicalNot),Elem];
+        Expression->[Symbol(Negation),Elem];
+        Expression->[Symbol(Sub),Elem];
+        Expression->[Symbol(Inc),Elem];
+        Expression->[Symbol(Dec),Elem];
+        Expression->[Expr0,Symbol(Inc)];
+        Expression->[Expr0,Symbol(Dec)];
+        Expression->[Symbol(And),Elem];
+        Expression->[KeyWord(Sizeof),Elem];
+        // 2: * % /
+        Expression->[Expression,Symbol(Star),Expression];
+        Expression->[Expression,Symbol(Mod),Expression];
+        Expression->[Expression,Symbol(Divide),Expression];
+        // 3: + -
+        Expression->[Expression,Symbol(Add),Expression];
+        Expression->[Expression,Symbol(Sub),Expression];
+        // 4: << >>
+        Expression->[Expression,Symbol(LeftShift),Expression];
+        Expression->[Expression,Symbol(RightShift),Expression];
+        // 5: < <= > >=
+        Expression->[Expression,Symbol(Less),Expression];
+        Expression->[Expression,Symbol(LessEqual),Expression];
+        Expression->[Expression,Symbol(Greater),Expression];
+        Expression->[Expression,Symbol(GreaterEqual),Expression];
+        // 6: == !=
+        Expression->[Expression,Symbol(Equal),Expression];
+        Expression->[Expression,Symbol(NotEqual),Expression];
+        // 7 &
+        Expression->[Expression,Symbol(And),Expression];
+        // 8 ^
+        Expression->[Expression,Symbol(Xor),Expression];
+        // 9 |
+        Expression->[Expression,Symbol(Or),Expression];
+        // 10 &&
+        Expression->[Expression,Symbol(LogicalAnd),Expression];
+        // 11 ||
+        Expression->[Expression,Symbol(LogicalOr),Expression];
+        //12 ? :
+        Expression->[Expression,Symbol(Trinocular),Expression,Symbol(Colon),Expression];
+
+        AssignOperator->[Symbol(Assignment)];
+        AssignOperator->[Symbol(MultiAssign)];
+        AssignOperator->[Symbol(ModAssign)];
+        AssignOperator->[Symbol(XorAssign)];
+        AssignOperator->[Symbol(AddAssign)];
+        AssignOperator->[Symbol(SubAssign)];
+        AssignOperator->[Symbol(DivAssign)];
+        AssignOperator->[Symbol(LeftShiftAssign)];
+        AssignOperator->[Symbol(RightShiftAssign)];
+        AssignOperator->[Symbol(AndAssign)];
+        AssignOperator->[Symbol(OrAssign)];
+
+        // TODO: , Symbol(Comma)
     }
 }
 
@@ -142,10 +140,26 @@ pub enum Ast {
     NT(Node),
 }
 
+impl Ast {
+    pub fn unwrap(self) -> Node {
+        match self {
+            Ast::NT(node) => node,
+            Ast::T(t) => panic!("Unwrap Node on Token {}", t),
+        }
+    }
+    pub fn unwrap_token(self) -> Token {
+        match self {
+            Ast::NT(node) => panic!("Unwrap Token on Node {}", node),
+            Ast::T(t) => t,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Node {
-    subs: Vec<Ast>,
-    rule: usize,
+    pub lhs: Nonterminal,
+    pub rule: usize,
+    pub child: Vec<Ast>,
 }
 
 impl std::fmt::Display for Ast {
@@ -156,10 +170,11 @@ impl std::fmt::Display for Ast {
         }
     }
 }
+
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}:{{", NTS[LHS[self.rule]])?;
-        for i in &self.subs {
+        write!(f, "{:?}:{{", self.lhs)?;
+        for i in &self.child {
             write!(f, "{} ", i)?;
         }
         write!(f, "}}")
@@ -170,17 +185,19 @@ impl std::fmt::Display for Node {
 pub fn fail(msg: &str, line: usize, col: usize) -> ! {
     panic!("\nSyntax Error: {}\nLine:{} ,Col:{}\n", msg, line, col);
 }
+
 #[cfg(not(test))]
 pub fn fail(msg: &str, line: usize, col: usize) -> ! {
-    println!("");
+    println!();
     eprintln!("Syntax Error: {}\nLine:{} ,Col:{}", msg, line, col);
-    std::process::exit(1);
+    std::process::exit(1)
 }
 
 pub fn parse(lexer: Lexer) -> Ast {
     let mut states = Vec::new();
     states.push(0);
     let mut ast = Vec::new();
+    // Ignore Comment
     let mut lex = lexer
         .filter(|t| {
             if let (Token::Comment(_), _, _) = t {
@@ -194,9 +211,6 @@ pub fn parse(lexer: Lexer) -> Ast {
     let mut input = String::new();
     loop {
         print!("{:?}\t", states);
-        /*for t in &ast {
-            print!("{} ", t);
-        }*/
         print!("input:");
         let i = lex
             .peek()
@@ -204,13 +218,12 @@ pub fn parse(lexer: Lexer) -> Ast {
                 line = *l;
                 col = *c;
                 input = format!("{}", i);
-                print!(" {},", i);
+                print!(" {}\t", i);
                 match_token(i).unwrap_or_else(|| {
                     fail(&format!("no match token for this input:{}", i), *l, *c)
                 })
             })
             .unwrap_or(TERMINAL_NUM);
-        print!(" #{}\t", i);
         match ACTIONS[*states.last().unwrap()][i] {
             Action::Shift(i) => {
                 println!("S{}", i);
@@ -220,18 +233,22 @@ pub fn parse(lexer: Lexer) -> Ast {
             Action::Reduce(rule) => {
                 print!("R{}", rule);
                 let len = ast.len() - LENS[rule];
-                let subs = ast.split_off(len);
+                let child = ast.split_off(len);
                 states.truncate(states.len() - LENS[rule]);
                 print!("\tReduces: ");
-                for j in &subs {
+                for j in &child {
                     match j {
-                        Ast::T(t) => print!("{}, ", t),
-                        Ast::NT(node) => print!("{}, ", NTS[LHS[node.rule]]),
+                        Ast::T(t) => print!("{:?}, ", t),
+                        Ast::NT(node) => print!("{:?}, ", node.lhs),
                     }
                 }
                 println!();
                 states.push(GOTOS[*states.last().unwrap()][LHS[rule]].unwrap());
-                ast.push(Ast::NT(Node { rule, subs }));
+                ast.push(Ast::NT(Node {
+                    rule,
+                    child,
+                    lhs: NT[LHS[rule]],
+                }));
             }
             Action::Accept => return ast.pop().unwrap(),
             Action::Error => fail(&format!("Unexpected Token {}", input), line, col),
@@ -239,8 +256,8 @@ pub fn parse(lexer: Lexer) -> Ast {
     }
 }
 
-pub fn print_ast(ast: &Ast) -> std::io::Result<()> {
-    let mut f = std::fs::File::create("ast.dot")?;
+pub fn print_ast(ast: &Ast, filename: &str) -> std::io::Result<()> {
+    let mut f = std::fs::File::create(filename)?;
     write!(
         f,
         "digraph G {{\nnode [shape=\"box\",style=\"rounded\",penwidth=1,width=2.0];"
@@ -259,8 +276,8 @@ pub fn print_ast(ast: &Ast) -> std::io::Result<()> {
                 write!(f, "s{}[label=\"{}\"]\n", s, t)?;
             }
             Ast::NT(node) => {
-                write!(f, "s{}[label=\"{}\"]\n", s, NTS[LHS[node.rule]])?;
-                node.subs.iter().enumerate().for_each(|(i, a)| {
+                write!(f, "s{}[label=\"{:?}\"]\n", s, node.lhs)?;
+                node.child.iter().enumerate().for_each(|(i, a)| {
                     let mut labels = labels.clone();
                     labels.push(i);
                     todo.push_back((a, labels));

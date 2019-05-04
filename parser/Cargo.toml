@@ -1,14 +1,18 @@
 [package]
 name = "parser"
 version = "0.1.0"
-authors = ["12101111 <w12101111@gmail.com>"]
+description = "LR parser for rcc."
+license = "MIT"
+authors = ["韩朴宇 <w12101111@gmail.com>"]
+repository = "https://github.com/12101111/rcc"
+homepage = "https://github.com/12101111/rcc"
 edition = "2018"
 [lib]
 proc-macro = true
 path = "lib.rs"
 [dependencies]
 syn = { version = "*", features = ["full","extra-traits"] }
-proc-macro2 = { version = "*", features = ["nightly"] }
+proc-macro2 = "*"
 quote = "*"
 cfg-if = "0.1"
 [features]

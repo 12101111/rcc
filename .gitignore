@@ -2,6 +2,7 @@
 **/*.rs.bk
 Cargo.lock
 .vscode
+.idea
 *.exe
 *.c
 ast.dot
@@ -9,6 +10,8 @@ lr0fsm.dot
 lr1fsm.dot
 lr1.csv
 slr.csv
+first_set.txt
+follow_set.txt
 core_lr0fsm.dot
-grammer.txt
+grammar.txt
 *.pdf

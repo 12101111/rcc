@@ -22,9 +22,9 @@ impl<'code> Lexer<'code> {
     }
     #[cfg(not(test))]
     pub fn fail(&self, msg: &str) -> ! {
-        println!("");
+        println!();
         eprintln!("Error: {}\nLine:{} ,Col:{}", msg, self.line, self.col);
-        std::process::exit(1);
+        std::process::exit(1)
     }
     fn next_char_or_none(&mut self) -> Option<char> {
         if let Some(c) = self.chars.next() {
@@ -373,39 +373,42 @@ mod tests {
         };
     }
 
-    macro_rules! string_token_eq {
+    macro_rules! token_eq {
         ($id:ident,$raw:expr,$lex:expr) => {
             #[test]
             fn $id() {
-                assert_eq!(
-                    Token::Literal($lex.to_owned()),
-                    Lexer::new($raw).next().unwrap().0
-                );
+                assert_eq!(Lexer::new($raw).next().unwrap().0, $lex);
             }
         };
     }
 
-    macro_rules! float_token_eq {
+    macro_rules! string_token_eq {
         ($id:ident,$raw:expr,$lex:expr) => {
-            #[test]
-            fn $id() {
-                assert_eq!(
-                    Token::Constant(Constant::Float($lex as f64)),
-                    Lexer::new($raw).next().unwrap().0
-                );
-            }
+            token_eq!($id, $raw, Token::Literal($lex.to_owned()));
         };
     }
 
     macro_rules! char_token_eq {
         ($id:ident,$raw:expr,$lex:expr) => {
-            #[test]
-            fn $id() {
-                assert_eq!(
-                    Token::Constant(Constant::Char($lex as u8)),
-                    Lexer::new($raw).next().unwrap().0
-                );
-            }
+            token_eq!($id, $raw, Token::Constant(Constant::Char($lex as u8)));
+        };
+    }
+
+    macro_rules! int_token_eq {
+        ($id:ident,$raw:expr,$lex:expr) => {
+            token_eq!($id, $raw, Token::Constant(Constant::Int($lex as i64)));
+        };
+    }
+
+    macro_rules! uint_token_eq {
+        ($id:ident,$raw:expr,$lex:expr) => {
+            token_eq!($id, $raw, Token::Constant(Constant::UInt($lex as u64)));
+        };
+    }
+
+    macro_rules! float_token_eq {
+        ($id:ident,$raw:expr,$lex:expr) => {
+            token_eq!($id, $raw, Token::Constant(Constant::Float($lex as f64)));
         };
     }
 
@@ -438,5 +441,14 @@ mod tests {
     fail!(unclosed_char3, "\'ab\'");
     fail!(empty_char, "\'\'");
 
-    float_token_eq!(f1, "0.5", 0.5);
+    uint_token_eq!(zero0, "0x0", 0);
+    int_token_eq!(zero1, "0", 0);
+    uint_token_eq!(zero2, "00", 0);
+    uint_token_eq!(hex0, "0x10", 16);
+    uint_token_eq!(hex1, "0xff", 255);
+    uint_token_eq!(hex2, "0xAd", 0xad);
+    uint_token_eq!(oct, "070", 56);
+    float_token_eq!(f1, "0.0", 0.0);
+    float_token_eq!(f2, "10.5", 10.5);
+    float_token_eq!(f3, "0.5", 0.5);
 }
