@@ -74,8 +74,8 @@ parser! {
         Expression->[Symbol(Sub),Elem];
         Expression->[Symbol(Inc),Elem];
         Expression->[Symbol(Dec),Elem];
-        Expression->[Expr0,Symbol(Inc)];
-        Expression->[Expr0,Symbol(Dec)];
+        Expression->[Elem,Symbol(Inc)];
+        Expression->[Elem,Symbol(Dec)];
         Expression->[Symbol(And),Elem];
         Expression->[KeyWord(Sizeof),Elem];
         // 2: * % /

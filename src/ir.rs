@@ -1,7 +1,39 @@
-use super::op::*;
 use crate::lexer::{Constant, KeyWord, Token};
-use crate::syntax::{print_ast, Ast, Node, Nonterminal};
+use crate::syntax::{Ast, Node, Nonterminal};
 use std::collections::HashMap;
+
+#[derive(Debug)]
+pub struct Program {
+    globals: HashMap<String, TypedValue>,
+    funcs: HashMap<String, Func>,
+}
+
+impl Program {
+    pub fn new(ast: Ast) -> Program {
+        //1: Program->[Declaration,Program];
+        let mut node = ast.unwrap();
+        assert_eq!(node.lhs, Nonterminal::Program);
+        let mut globals = HashMap::new();
+        let mut funcs = HashMap::new();
+        while node.child.len() == 2 {
+            let mut child = node.child.into_iter();
+            let mut decl = child.next().unwrap().unwrap(); //Declaration
+            node = child.next().unwrap().unwrap(); //Program
+            match decl.rule {
+                // 3: Declaration->[VarDecl,Symbol(Semicolon)];
+                3 => globals.extend(TypedValue::from_global_decl(decl)),
+                // 4: Declaration->[FuncDef,Symbol(Semicolon)];
+                // 5: Declaration->[FuncDef,Symbol(LeftBrace),Statements,Symbol(RightBrace)];
+                _ => {
+                    let func = Func::from_decl(decl);
+                    funcs.insert(func.ident.clone(), func);
+                }
+            }
+        }
+        Program { funcs, globals }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Char,
@@ -94,7 +126,7 @@ impl TypedValue {
                     let expr = elem.next().unwrap().unwrap();
                     let val = Expression::const_expr(expr);
                     if val.get_type() != val_type {
-                        panic!("Expect {:?},Found Type {:?}", valtype, val.get_type());
+                        panic!("Expect {:?},Found Type {:?}", val_type, val.get_type());
                     }
                     val
                 }
@@ -110,7 +142,7 @@ impl TypedValue {
         ans
     }
     pub fn from_constant(mut node: Node) -> TypedValue {
-        assert_eq!(node.lhs, Nonterminal::Expr0);
+        assert_eq!(node.lhs, Nonterminal::Elem);
         let val = node.child.pop().unwrap().unwrap_token();
         let val = match val {
             Token::Constant(c) => c,
@@ -149,7 +181,7 @@ impl Func {
         let _ = child.next();
         match child.next() {
             // 4: Declaration->[FuncDef,Symbol(Semicolon)];
-            None => break,
+            None => {},
             // 5: Declaration->[FuncDef,Symbol(LeftBrace),Statements,Symbol(RightBrace)];
             Some(s) => def.body = Some(Block::from_statements(s.unwrap())),
         }
@@ -254,4 +286,68 @@ impl Block {
     fn from_expression(mut node: Node) -> Block {
         unimplemented!()
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum Statement {
+    Funcall(String, Vec<String>),
+    Return(String),
+    Assignment(String, Expression),
+    If(String, usize),
+    Goto(usize),
+}
+impl Statement {
+    pub fn from_call(node: Node) -> Vec<Statement> {
+        assert_eq!(node.lhs, Nonterminal::Funcall);
+        let mut child = node.child.into_iter();
+        let ident = child.next().unwrap().unwrap_token();
+        let _ = child.next();
+        let mut paras = child.next().unwrap().unwrap();
+        //let args = Vec::new();
+        if paras.child.len() > 0 {
+            let list = paras.child.pop().unwrap().unwrap();
+            let mut list = list.child.into_iter();
+            let exprs = ExpressionBuilder::new(list.next().unwrap().unwrap());
+        }
+        unimplemented!()
+    }
+}
+#[derive(Debug, Clone)]
+pub enum Expression {
+    LValue(String),
+    Constant(TypedValue),
+    Funcall(String, Vec<String>),
+    Mono(MonoOp, String),
+    Bin(String, BinOp, String),
+}
+impl Expression {
+    pub fn const_expr(mut node: Node) -> TypedValue {
+        unimplemented!()
+    }
+}
+
+struct ExpressionBuilder {
+    tmp_var: HashMap<String, TypedValue>,
+    extern_var: HashMap<String, Type>,
+    expr: Vec<Expression>,
+    ast: Ast,
+}
+
+impl ExpressionBuilder {
+    pub fn new(node: Node) -> ExpressionBuilder {
+        unimplemented!()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum BinOp {
+    Star,
+    Mod,
+    Divide,
+}
+#[derive(Debug, Clone, Copy)]
+pub enum MonoOp {
+    LogicalNot,
+    Negation,
+    Sub,
 }
