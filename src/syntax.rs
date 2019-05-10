@@ -250,7 +250,10 @@ pub fn parse(lexer: Lexer) -> Ast {
                     lhs: NT[LHS[rule]],
                 }));
             }
-            Action::Accept => return ast.pop().unwrap(),
+            Action::Accept => {
+                println!("\tAccept");
+                return ast.pop().unwrap()
+            },
             Action::Error => fail(&format!("Unexpected Token {}", input), line, col),
         }
     }
