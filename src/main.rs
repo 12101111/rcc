@@ -1,11 +1,11 @@
+#![feature(never_type)]
 mod ir;
 mod lexer;
+mod parser;
 mod preprocessor;
-mod syntax;
 use crate::lexer::Lexer;
+use crate::parser::{parse, print_ast};
 use crate::preprocessor::preprocess;
-use crate::syntax::{parse, print_ast};
-use ir::Program;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let file_path = args.get(1).expect("No input file");
@@ -16,6 +16,6 @@ fn main() {
     let lexer = Lexer::new(&code);
     let ast = parse(lexer);
     print_ast(&ast, "ast.dot").unwrap();
-    let program = Program::new(ast);
-    println!("\nProgram:\n{}", program);
+    let program = ast.unwrap_program();
+    println!("Program:\n{}", program);
 }

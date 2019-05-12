@@ -9,40 +9,65 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::io::Write;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
-use syn::{braced, bracketed, parse_macro_input, token, Pat, PatTupleStruct, Result, Token};
+use syn::{
+    parenthesized, parse_macro_input, token, Block, Pat, PatTupleStruct, Result, Token, Type,
+};
 
 struct GrammarTokens {
-    start: Ident,
-    _brace_token: token::Brace,
-    rules: Punctuated<RuleTokens, Token![;]>,
+    rules: Vec<RuleTokens>,
 }
 
 impl Parse for GrammarTokens {
     fn parse(input: ParseStream) -> Result<Self> {
-        let content;
         Ok(GrammarTokens {
-            start: input.parse()?,
-            _brace_token: braced!(content in input),
-            rules: content.parse_terminated(RuleTokens::parse)?,
+            rules: {
+                let mut rules = Vec::new();
+                while !input.is_empty() {
+                    rules.push(input.parse()?);
+                }
+                rules
+            },
         })
     }
 }
 
 struct RuleTokens {
+    _fn: Token![fn],
     lhs: Ident,
+    _paren: token::Paren,
+    rhs: Punctuated<SymToken, Token![,]>,
     _arrow: Token![->],
-    _bracket_token: token::Bracket,
-    rhs: Punctuated<Pat, Token![,]>,
+    ty: Type,
+    func: Block,
 }
 
 impl Parse for RuleTokens {
     fn parse(input: ParseStream) -> Result<Self> {
         let content;
         Ok(RuleTokens {
+            _fn: input.parse()?,
             lhs: input.parse()?,
+            _paren: parenthesized!(content in input),
+            rhs: content.parse_terminated(SymToken::parse)?,
             _arrow: input.parse()?,
-            _bracket_token: bracketed!(content in input),
-            rhs: content.parse_terminated(Pat::parse)?,
+            ty: input.parse()?,
+            func: input.parse()?,
+        })
+    }
+}
+
+struct SymToken {
+    ident: Ident,
+    _colon: Token![:],
+    pat: Pat,
+}
+
+impl Parse for SymToken {
+    fn parse(input: ParseStream) -> Result<Self> {
+        Ok(SymToken {
+            ident: input.parse()?,
+            _colon: input.parse()?,
+            pat: input.parse()?,
         })
     }
 }
@@ -52,81 +77,137 @@ fn format<T: quote::ToTokens>(i: T) -> String {
     format!("{}", stream)
 }
 
-fn get_or_insert<T>(ele: T, map: &mut HashMap<T, usize>, vec: &mut Vec<T>) -> usize
-where
-    T: Eq + std::hash::Hash + Clone,
-{
-    match map.get(&ele) {
-        Some(&i) => i,
-        None => {
-            let i = vec.len();
-            map.insert(ele.clone(), i);
-            vec.push(ele);
-            i
+impl GrammarTokens {
+    pub fn into_grammar(self) -> Grammar {
+        let mut rules = Vec::new();
+        let mut funcs = Vec::new();
+        let mut nt = Vec::new();
+        let mut nt_types = Vec::new();
+        let mut t = Vec::new();
+        let mut nt_map = HashMap::new();
+        let mut t_map = HashMap::new();
+        let start = Ident::new("_START", Span::call_site());
+        nt.push(start.clone());
+        nt_types.push(Type::Tuple(syn::TypeTuple {
+            paren_token: syn::token::Paren {
+                span: Span::call_site(),
+            },
+            elems: Punctuated::new(),
+        }));
+        nt_map.insert(start, 0);
+        funcs.push(Block {
+            brace_token: syn::token::Brace {
+                span: Span::call_site(),
+            },
+            stmts: vec![syn::Stmt::Expr(syn::Expr::Tuple(syn::ExprTuple {
+                attrs: Vec::new(),
+                paren_token: syn::token::Paren {
+                    span: Span::call_site(),
+                },
+                elems: Punctuated::new(),
+            }))],
+        });
+        for rule in self.rules.iter() {
+            match nt_map.get(&rule.lhs) {
+                Some(&i) => {
+                    if nt_types[i] != rule.ty {
+                        panic!(
+                            "Nonterminal {} map to multiple parsed types: {} and {}",
+                            format(rule.lhs.clone()),
+                            format(nt_types[i].clone()),
+                            format(rule.ty.clone())
+                        );
+                    }
+                }
+                None => {
+                    let i = nt.len();
+                    nt_map.insert(rule.lhs.clone(), i);
+                    nt.push(rule.lhs.clone());
+                    nt_types.push(rule.ty.clone());
+                }
+            }
+        }
+        rules.push(Rule {
+            lhs: 0,
+            rhs: vec![(Sym::NT(1), Ident::new("_start", Span::call_site()))],
+        });
+        for rule in self.rules.into_iter() {
+            funcs.push(rule.func);
+            rules.push(Rule {
+                lhs: *nt_map
+                    .get(&rule.lhs)
+                    .expect(&format!("Can't find rule for {}", format(rule.lhs.clone()))),
+                rhs: rule
+                    .rhs
+                    .into_iter()
+                    .map(|sym| {
+                        (
+                            match sym.pat {
+                                Pat::Ident(syn::PatIdent { ident, .. }) => {
+                                    Sym::NT(*nt_map.get(&ident).expect(&format!(
+                                        "Can't find rule for {}",
+                                        format(ident.clone())
+                                    )))
+                                }
+                                Pat::TupleStruct(pat) => Sym::T(match t_map.get(&pat) {
+                                    Some(&i) => i,
+                                    None => {
+                                        let i = t.len();
+                                        t_map.insert(pat.clone(), i);
+                                        t.push(pat);
+                                        i
+                                    }
+                                }),
+                                _ => panic!("Unexpect Type,{:#?}", sym.pat),
+                            },
+                            sym.ident,
+                        )
+                    })
+                    .collect(),
+            });
+        }
+        Grammar {
+            rules,
+            funcs,
+            nt,
+            nt_types,
+            t,
         }
     }
 }
 
-impl GrammarTokens {
-    pub fn into_grammar(self) -> Grammar {
-        let mut nt_map = HashMap::new();
-        let mut nt = Vec::new();
-        let mut t_map = HashMap::new();
-        let mut t = Vec::new();
-        let start = Ident::new("_START", Span::call_site());
-        nt.push(start.clone());
-        nt_map.insert(start, 0);
-        let mut rules: Vec<_> = self
-            .rules
-            .into_iter()
-            .map(|r| {
-                let lhs = get_or_insert(r.lhs, &mut nt_map, &mut nt);
-                let rhs = r
-                    .rhs
-                    .into_iter()
-                    .map(|i| match i {
-                        Pat::Ident(syn::PatIdent { ident, .. }) => {
-                            Sym::NT(get_or_insert(ident, &mut nt_map, &mut nt))
-                        }
-                        Pat::TupleStruct(pat) => Sym::T(get_or_insert(pat, &mut t_map, &mut t)),
-                        _ => panic!("Unexpect Type,{:#?}", i),
-                    })
-                    .collect();
-                Rule { lhs, rhs }
-            })
-            .collect();
-        let rule = Rule {
-            lhs: 0,
-            rhs: {
-                let i = nt_map.get(&self.start).unwrap();
-                vec![Sym::NT(*i)]
-            },
-        };
-        rules.insert(0, rule);
-        Grammar { rules, nt, t }
-    }
+#[proc_macro]
+pub fn parser(tokens: TokenStream) -> TokenStream {
+    use std::io::Read;
+    use std::str::FromStr;
+    let mut file = format(proc_macro2::TokenStream::from(tokens));
+    let _ = file.pop();
+    let root = env!("CARGO_MANIFEST_DIR");
+    let file = format!("{}/../src/{}", root, &file[1..]);
+    println!("{}", file);
+    let mut file = std::fs::File::open(&file).expect("Unable to open file");
+    let mut src = String::new();
+    file.read_to_string(&mut src).expect("Unable to read file");
+    let syntax = TokenStream::from_str(&src).expect("Unable to parse file");
+    parse(syntax)
 }
 
 cfg_if! {
     if #[cfg(feature="lr1")]{
-        #[proc_macro]
-        pub fn parser(tokens: TokenStream) -> TokenStream {
+        fn parse(tokens: TokenStream) -> TokenStream {
             parse_macro_input!(tokens as GrammarTokens).into_grammar().lr1()
         }
     } else if #[cfg(feature="slr")]{
-        #[proc_macro]
-        pub fn parser(tokens: TokenStream) -> TokenStream {
+        fn parse(tokens: TokenStream) -> TokenStream {
             parse_macro_input!(tokens as GrammarTokens).into_grammar().slr()
         }
     } else if #[cfg(feature="lalr")]{
-        #[proc_macro]
-        pub fn parser(tokens: TokenStream) -> TokenStream {
+        fn parse(tokens: TokenStream) -> TokenStream {
             parse_macro_input!(tokens as GrammarTokens).into_grammar().lalr();
             unimplemented!()
         }
     } else{
-        #[proc_macro]
-        pub fn parser(tokens: TokenStream) -> TokenStream {
+        fn parse(_tokens: TokenStream) -> TokenStream {
             panic!("Select a feature to use!")
         }
     }
@@ -135,13 +216,15 @@ cfg_if! {
 struct Grammar {
     // 第0条规则总为_START->起点
     rules: Vec<Rule>,
+    funcs: Vec<Block>,
     nt: Vec<Ident>,
+    nt_types: Vec<Type>,
     t: Vec<PatTupleStruct>,
 }
 
 struct Rule {
     lhs: usize,
-    rhs: Vec<Sym>,
+    rhs: Vec<(Sym, Ident)>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
@@ -237,7 +320,7 @@ impl Grammar {
         write!(f, "\nRules:\n")?;
         for i in &self.rules {
             write!(f, "{}->", self.nt[i.lhs])?;
-            for &j in &i.rhs {
+            for &(j, _) in &i.rhs {
                 write!(f, "{}, ", format_sym(j, self))?;
             }
             write!(f, "\n")?;
@@ -246,8 +329,10 @@ impl Grammar {
     }
 
     fn gen_code(&self, actions: Vec<Vec<Action>>, gotos: Vec<Vec<Option<usize>>>) -> TokenStream {
-        let nts: Vec<_> = self.nt.clone();
-        let nt: Vec<_> = self.nt.clone();
+        let nts1: Vec<_> = self.nt.clone();
+        let nts2: Vec<_> = self.nt.clone();
+        let nt_string: Vec<_> = self.nt.clone().into_iter().map(|nt| format(nt)).collect();
+        let types: Vec<_> = self.nt_types.clone();
         let actions: Vec<_> = actions
             .into_iter()
             .map(|action| {
@@ -270,6 +355,57 @@ impl Grammar {
                 quote! {&[#(#gotos),*]}
             })
             .collect();
+        let mut func = Vec::new();
+        let funcs: Vec<_> = self
+            .funcs
+            .clone()
+            .into_iter()
+            .enumerate()
+            .map(|(i, block)| {
+                let fn_ident = Ident::new(&format!("_f{}", i), Span::call_site());
+                func.push(fn_ident.clone());
+                let return_type = self.nt_types[self.rules[i].lhs].clone();
+                let variant = self.nt[self.rules[i].lhs].clone();
+                let idents: Vec<_> = self.rules[i]
+                    .rhs
+                    .clone()
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, (sym, ident))| match sym {
+                        Sym::NT(nt) => {
+                            let return_type = self.nt_types[nt].clone();
+                            let variant = self.nt[nt].clone();
+                            quote! {
+                                let mut #ident: #return_type = match child[#i].clone(){
+                                    Ast::NT(node)=>{
+                                        match node.lhs{
+                                            Nonterminal::#variant(i)=> *i,
+                                            _=>unreachable!()
+                                        }
+                                    }
+                                    _=>unreachable!()
+                                };
+                            }
+                        }
+                        Sym::T(_) => {
+                            quote! {
+                                let #ident = match child[#i].clone(){
+                                    Ast::T(token)=>token,
+                                    _=>unreachable!()
+                                };
+                            }
+                        }
+                    })
+                    .collect();
+                quote! {
+                    fn #fn_ident(child:&[Ast])->Nonterminal{
+                        #(#idents)*
+                        let val: #return_type = #block;
+                        Nonterminal::#variant(Box::new(val))
+                    }
+                }
+            })
+            .collect();
         let lhs: Vec<_> = self.rules.iter().map(|r| r.lhs).collect();
         let lens: Vec<_> = self.rules.iter().map(|r| r.rhs.len()).collect();
         let tokens = self.t.clone();
@@ -278,13 +414,21 @@ impl Grammar {
         let stream = quote! {
             const GOTOS:&[&[Option<usize>]] = &[#(#gotos),*];
             const ACTIONS:&[&[Action]] = &[#(#actions),*];
-            const NT:&[Nonterminal] = &[#(Nonterminal::#nt),*];
             const LHS:&[usize] = &[#(#lhs),*];
             const LENS:&[usize] = &[#(#lens),*];
+            const FUNC:&[fn(&[Ast])->Nonterminal] = &[#(#func),*];
             const TERMINAL_NUM:usize = #empty;
-            #[derive(PartialEq, Eq,Debug,Clone,Copy)]
+            #[derive(Clone)]
             pub enum Nonterminal{
-                #(#nts),*
+                #(#nts1(Box<#types>)),*
+            }
+            impl std::fmt::Debug for Nonterminal{
+                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    use Nonterminal::*;
+                    match self{
+                        #(#nts2(_)=>write!(f,#nt_string)),*
+                    }
+                }
             }
             fn match_token(t:&Token)->Option<usize>{
                 match t{
@@ -292,6 +436,7 @@ impl Grammar {
                     _=>None
                 }
             }
+            #(#funcs)*
         };
         stream.into()
     }
@@ -304,7 +449,7 @@ impl Grammar {
         loop {
             let mut stop = true;
             'rule: for rule in self.rules.iter() {
-                for sym in rule.rhs.iter() {
+                for (sym, _) in rule.rhs.iter() {
                     match sym {
                         Sym::T(i) => {
                             if ans[rule.lhs].0.insert(*i) {
@@ -349,7 +494,7 @@ impl Grammar {
         let mut ans: Vec<_> = (0..self.nt.len())
             .map(|_| (BTreeSet::new(), false))
             .collect();
-        if let &Sym::NT(i) = &self.rules[0].rhs[0] {
+        if let &Sym::NT(i) = &self.rules[0].rhs[0].0 {
             ans[i].1 = true;
         } else {
             panic!("")
@@ -358,7 +503,7 @@ impl Grammar {
             let mut stop = true;
             for rule in self.rules.iter() {
                 let mut follow = ans[rule.lhs].clone();
-                for sym in rule.rhs.iter().rev() {
+                for (sym, _ident) in rule.rhs.iter().rev() {
                     match sym {
                         Sym::T(i) => {
                             follow.0.clear();
@@ -399,7 +544,7 @@ impl Grammar {
         let mut closure: BTreeSet<_> = core.0.iter().cloned().collect();
         let mut to_add: VecDeque<_> = core.0.iter().cloned().collect();
         while let Some(item) = to_add.pop_front() {
-            if let Some(&Sym::NT(ref nt)) = self.rules[item.rule].rhs.get(item.pos) {
+            if let Some(&(Sym::NT(ref nt), _)) = self.rules[item.rule].rhs.get(item.pos) {
                 for i in 0..self.rules.len() {
                     if &self.rules[i].lhs == nt {
                         let it = LR0Item { rule: i, pos: 0 };
@@ -434,7 +579,7 @@ impl Grammar {
             for item in (states[finished].0).0.iter() {
                 let rule = &self.rules[item.rule];
                 if item.pos < rule.rhs.len() {
-                    next.entry(rule.rhs[item.pos])
+                    next.entry(rule.rhs[item.pos].0)
                         .or_insert(Vec::new())
                         .push(LR0Item {
                             rule: item.rule,
@@ -667,8 +812,10 @@ impl Grammar {
                             "Reduce-Reduce Conflict at ACTION[{}][{}], input:{}, old:R{}, new:R{}, actions:{:?}",
                             i, f, format(self.t[f].clone()), j, item.rule,actions
                         ),
+                        // FIXME: core
                         Action::Shift(j) => {
-                            let shift = &(core[j].0).0;
+                            panic!("There is some bug in LR(1),use SLR instead")
+                            /*let shift = &(core[j].0).0;
                             if shift.len() == 1 {
                                 if item.rule <= shift[0].rule{
                                     actions[i][f] = Action::Reduce(item.rule);
@@ -678,7 +825,7 @@ impl Grammar {
                                     "Shift-Reduce Conflict at ACTION[{}][{}], input:{}, old:S{}, new:R{}, actions:{:?}",
                                     i, f, format(self.t[f].clone()), j, item.rule,actions
                                 );
-                            }
+                            }*/
                         },
                         Action::Accept => unreachable!(),
                     }
@@ -790,11 +937,11 @@ impl LR0FSM {
                 let rule = &grammar.rules[item.rule];
                 write!(f, "{}->", grammar.nt[rule.lhs])?;
                 for j in 0..item.pos {
-                    write!(f, "{} ", format_sym(rule.rhs[j], grammar))?;
+                    write!(f, "{} ", format_sym(rule.rhs[j].0, grammar))?;
                 }
                 write!(f, ".")?;
                 for j in item.pos..rule.rhs.len() {
-                    write!(f, "{} ", format_sym(rule.rhs[j], grammar))?;
+                    write!(f, "{} ", format_sym(rule.rhs[j].0, grammar))?;
                 }
                 write!(f, "\\n")?;
             }
