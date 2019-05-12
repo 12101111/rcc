@@ -51,12 +51,15 @@ impl Program {
                 // 4: Declaration->[FuncDef,Symbol(Semicolon)];
                 // 5: Declaration->[FuncDef,Symbol(LeftBrace),Statements,Symbol(RightBrace)];
                 _ => {
-                    let func_map = p
+                    let mut func_map: Vec<_> = p
                         .funcs
                         .iter()
                         .enumerate()
                         .map(|(i, (id, func))| (id.clone(), Pointer::Func(func.return_type, i)))
                         .collect();
+                    func_map.extend(p.globals.iter().enumerate().map(|(i, (id, vty))| {
+                        (id.clone(), Pointer::Extern(vty.get_type(), id.clone()))
+                    }));
                     let func = Func::from_decl(decl, func_map);
                     if p.funcs.get(&func.ident).is_some()
                         && p.funcs.get(&func.ident).unwrap().body.is_some()
@@ -131,6 +134,10 @@ impl Func {
                         .enumerate()
                         .map(|(i, (id, ty))| (id, Pointer::Para(ty, i))),
                 );
+                block.context.insert(
+                    def.ident.clone(),
+                    Pointer::Func(def.return_type, func_map.len()),
+                );
                 block.context.extend(func_map.clone());
                 block.insert_statements(s.unwrap());
                 def.body = Some(block);
@@ -192,7 +199,6 @@ pub enum Type {
     UInt,
     Float,
     Void,
-    //Struct(Struct),
 }
 
 impl std::fmt::Display for Type {
@@ -323,13 +329,13 @@ pub struct Block {
 
 impl std::fmt::Display for Block {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        writeln!(f, "\tLocal Variables:")?;
+        writeln!(f, "\t[Local Context]:")?;
         for (ident, ptr) in self.context.iter() {
             writeln!(f, "\t{} : {}", ident, ptr)?;
         }
-        writeln!(f, "\tStatements:")?;
-        for st in self.statement.iter() {
-            writeln!(f, "\t{}", st)?;
+        writeln!(f, "\t[Statements]:")?;
+        for (i,st) in self.statement.iter().enumerate() {
+            writeln!(f, "{}:\t{}", i,st)?;
         }
         Ok(())
     }
@@ -393,21 +399,24 @@ impl Block {
                     let _rp = child.next();
                     let _lb = child.next();
                     let statements = child.next().unwrap().unwrap();
+                    let line = self.statement.len() as isize;
                     let condition = self.insert_expression(condition, None);
                     let mut while_block = Block::new();
                     while_block
                         .context
                         .extend(self.context.clone().into_iter().map(|(id, m)| match m {
-                            Pointer::Mem(ty, i) => (id, Pointer::Extern(ty, i)),
+                            Pointer::Mem(ty, i) => (id.clone(), Pointer::Extern(ty, id)),
                             _ => (id, m),
                         }));
                     while_block.insert_statements(statements);
-                    // +0: if condition==0 jmp +2
-                    // +1: while_block
-                    // +2: jmp -2
+                    // begin: calc condition
+                    // if condition==0 jmp +2
+                    // while_block
+                    // jmp begin
                     self.statement.push(Statement::Je(condition, 2));
                     self.statement.push(Statement::Block(while_block));
-                    self.statement.push(Statement::Jmp(-2));
+                    self.statement
+                        .push(Statement::Jmp(line - self.statement.len() as isize - 1));
                 }
                 // Statement->[KeyWord(Do),Symbol(LeftBrace),Statements,Symbol(RightBrace),
                 // KeyWord(While),Symbol(LeftParen),Expression,Symbol(RightParen),Symbol(Semicolon)];
@@ -424,17 +433,21 @@ impl Block {
                     while_block
                         .context
                         .extend(self.context.clone().into_iter().map(|(id, m)| match m {
-                            Pointer::Mem(ty, i) => (id, Pointer::Extern(ty, i)),
+                            Pointer::Mem(ty, i) => (id.clone(), Pointer::Extern(ty, id)),
                             _ => (id, m),
                         }));
                     while_block.insert_statements(statements);
-                    // +0: while_block
-                    // +1: if condition==0 jmp 1
-                    // +2: jmp -2
+                    // begin:
+                    // while_block
+                    // calc condition
+                    // if condition==0 jmp +1
+                    // jmp begin
+                    let line = self.statement.len() as isize;
                     self.statement.push(Statement::Block(while_block));
                     let condition = self.insert_expression(condition, None);
                     self.statement.push(Statement::Je(condition, 1));
-                    self.statement.push(Statement::Jmp(-2));
+                    self.statement
+                        .push(Statement::Jmp(line - self.statement.len() as isize- 1));
                 }
                 // Statement->[LValue,AssignOperator,Expression,Symbol(Semicolon)];
                 31 => {
@@ -472,16 +485,16 @@ impl Block {
         if_block
             .context
             .extend(self.context.clone().into_iter().map(|(id, m)| match m {
-                Pointer::Mem(ty, i) => (id, Pointer::Extern(ty, i)),
+                Pointer::Mem(ty, i) => (id.clone(), Pointer::Extern(ty, id)),
                 _ => (id, m),
             }));
         if_block.insert_statements(if_stats);
         match else_st.child.len() {
             0 => {
-                // if (condition) { if_block }
-                // +0: if condition==0 jmp +1   ;jmp to +2
-                // +1: if_block
-                // +2:                          ;end target
+                // if (condition) { if_block } Non-else-non-else-if
+                // calc condition
+                // if condition==0 jmp +1
+                // if_block
                 self.statement.push(Statement::Je(condition, 1));
                 self.statement.push(Statement::Block(if_block));
             }
@@ -494,11 +507,12 @@ impl Block {
                 else_block
                     .context
                     .extend(self.context.clone().into_iter().map(|(id, m)| match m {
-                        Pointer::Mem(ty, i) => (id, Pointer::Extern(ty, i)),
+                        Pointer::Mem(ty, i) => (id.clone(), Pointer::Extern(ty, id)),
                         _ => (id, m),
                     }));
                 else_block.insert_statements(else_stats);
                 // if (condition) { if_block } else { else_block }
+                // calc condition
                 // +0: if condition==0 jmp +2   ;jmp to +3
                 // +1: if_block
                 // +2: jmp +1                   ;jmp to +4
@@ -510,18 +524,22 @@ impl Block {
                 self.statement.push(Statement::Block(else_block));
             }
             2 => {
-                let if_stats = else_st.child.pop().unwrap().unwrap();
+                let if_stmts = else_st.child.pop().unwrap().unwrap();
                 // if (condition) { if_block } else if {}
-                // +0: if condition==0 jmp +2   ;jmp to +3
-                // +1: if_block
-                // +2: jmp +2                   ;jmp to +5
-                // +3: if condition==0
-                // +4: if_block
-                // +5: end / jmp +1 / jmp +2    ;end target
+                // calc condition
+                // if condition==0 jmp +2
+                // if_block
+                // jmp end
+                // calc condition2
+                // if condition2==0
+                // if_block
+                // end:
                 self.statement.push(Statement::Je(condition, 2));
                 self.statement.push(Statement::Block(if_block));
+                let jmp = self.statement.len();
                 self.statement.push(Statement::Jmp(2));
-                self.insert_if(if_stats);
+                self.insert_if(if_stmts);
+                self.statement[jmp]=Statement::Jmp(self.statement.len() as isize - jmp as isize - 1);
             }
             _ => unreachable!(),
         }
@@ -565,12 +583,13 @@ impl Block {
                 let right = child.next().unwrap().unwrap();
                 let op = Unary::from_symbol(op);
                 let right = self.insert_elem(right, None);
-                let expr = Expression::Unary(op, right);
+                let expr = Expression::Unary(op, right.clone());
                 let ptr = match ptr {
                     Some(ptr) => ptr,
                     None => self.add_tmp(right.get_type()),
                 };
-                self.statement.push(Statement::Assignment(ptr, expr));
+                self.statement
+                    .push(Statement::Assignment(ptr.clone(), expr));
                 ptr
             }
             54...59 => unimplemented!(),
@@ -582,12 +601,13 @@ impl Block {
                 let left = self.insert_expression(left, None);
                 let right = self.insert_expression(right, None);
                 let op = BinOp::from_symbol(op);
-                let expr = Expression::Bin(left, op, right);
+                let expr = Expression::Bin(left, op, right.clone());
                 let ptr = match ptr {
                     Some(ptr) => ptr,
                     None => self.add_tmp(right.get_type()),
                 };
-                self.statement.push(Statement::Assignment(ptr, expr));
+                self.statement
+                    .push(Statement::Assignment(ptr.clone(), expr));
                 ptr
             }
             78 => unimplemented!(),
@@ -604,8 +624,10 @@ impl Block {
                     Some(ptr) => ptr,
                     None => self.add_tmp(val.get_type()),
                 };
-                self.statement
-                    .push(Statement::Assignment(ptr, Expression::Constant(val)));
+                self.statement.push(Statement::Assignment(
+                    ptr.clone(),
+                    Expression::Constant(val),
+                ));
                 ptr
             }
             48 => {
@@ -616,9 +638,15 @@ impl Block {
             }
             49 => {
                 let (i, a) = self.call(node.child.pop().unwrap().unwrap());
-                let expr = Expression::Func(i.clone(), a); //TODO: Type
-                let ptr = self.add_tmp(self.context.get(&i).expect("Call undeclared function").get_type());
-                self.statement.push(Statement::Assignment(ptr, expr));
+                let expr = Expression::Func(i.clone(), a);
+                let ptr = self.add_tmp(
+                    self.context
+                        .get(&i)
+                        .expect("Call undeclared function")
+                        .get_type(),
+                );
+                self.statement
+                    .push(Statement::Assignment(ptr.clone(), expr));
                 ptr
             }
             _ => unreachable!(),
@@ -660,7 +688,7 @@ impl Block {
                     _ => unreachable!(),
                 };
                 match self.context.get(&ident) {
-                    Some(ptr) => *ptr,
+                    Some(ptr) => ptr.clone(),
                     None => {
                         fail!("Undeclared variable: {}", ident);
                     }
@@ -677,7 +705,6 @@ pub enum Statement {
     Call(String, Vec<Pointer>),
     Return(Pointer),
     Assignment(Pointer, Expression),
-    /// Jump to second if mem[first] equal zero
     Je(Pointer, isize),
     Jmp(isize),
     Block(Block),
@@ -697,7 +724,7 @@ impl std::fmt::Display for Statement {
             Statement::Assignment(ptr, expr) => write!(f, "{} = {}", ptr, expr),
             Statement::Je(ptr, dst) => write!(f, "if {}==0 jmp {}", ptr, dst),
             Statement::Jmp(dst) => write!(f, "jmp {}", dst),
-            Statement::Block(b) => write!(f, "\rBlock:{}End block", b),
+            Statement::Block(b) => write!(f, "\nBlock:\n{}End block", b),
         }
     }
 }
@@ -729,11 +756,11 @@ impl std::fmt::Display for Expression {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Pointer {
     Mem(Type, usize),
     Para(Type, usize),
-    Extern(Type, usize),
+    Extern(Type, String),
     Func(Type, usize),
 }
 
@@ -751,10 +778,10 @@ impl Pointer {
 impl std::fmt::Display for Pointer {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Pointer::Mem(ty, i) => write!(f, "({}*)Mem[{}]", ty, i),
-            Pointer::Para(ty, i) => write!(f, "({}*)Para[{}]", ty, i),
-            Pointer::Extern(ty, i) => write!(f, "({}*)Extern[{}]", ty, i),
-            Pointer::Func(ty, i) => write!(f, "({}*)Func[{}]", ty, i),
+            Pointer::Mem(ty, i) => write!(f, "Mem[{},{}]", ty, i),
+            Pointer::Para(ty, i) => write!(f, "Para[{},{}]", ty, i),
+            Pointer::Extern(ty, s) => write!(f, "Extern[{},{}]", ty, s),
+            Pointer::Func(ty, i) => write!(f, "Func[{},{}]", ty, i),
         }
     }
 }
@@ -827,11 +854,3 @@ unary! {
     Negation,
     Sub
 }
-
-/*
-#[derive(Debug, Clone, PartialEq)]
-pub struct Struct {
-    ident: String,
-    member: HashMap<String, Type>,
-}
-*/
