@@ -41,8 +41,8 @@ impl Program {
                     TypedValue::from_const_block(block)
                         .into_iter()
                         .for_each(|(id, val)| {
-                            if p.name_map.get(&id).is_some(){
-                                fail!("Redeclare variable: {}",id);
+                            if p.name_map.get(&id).is_some() {
+                                fail!("Redeclare variable: {}", id);
                             }
                             p.name_map.insert(id.clone(), p.globals.len());
                             p.globals.push((id, val));
@@ -51,9 +51,17 @@ impl Program {
                 // 4: Declaration->[FuncDef,Symbol(Semicolon)];
                 // 5: Declaration->[FuncDef,Symbol(LeftBrace),Statements,Symbol(RightBrace)];
                 _ => {
-                    let func = Func::from_decl(decl);
-                    if p.funcs.get(&func.ident).is_some(){
-                        fail!("Redeclare function: {}",func.ident);
+                    let func_map = p
+                        .funcs
+                        .iter()
+                        .enumerate()
+                        .map(|(i, (id, func))| (id.clone(), Pointer::Func(func.return_type, i)))
+                        .collect();
+                    let func = Func::from_decl(decl, func_map);
+                    if p.funcs.get(&func.ident).is_some()
+                        && p.funcs.get(&func.ident).unwrap().body.is_some()
+                    {
+                        fail!("Redeclare function: {}", func.ident);
                     }
                     p.funcs.insert(func.ident.clone(), func);
                 }
@@ -104,7 +112,7 @@ impl std::fmt::Display for Func {
 }
 
 impl Func {
-    pub fn from_decl(node: Node) -> Func {
+    pub fn from_decl(node: Node, func_map: Vec<(String, Pointer)>) -> Func {
         assert_eq!(node.lhs, Nonterminal::Declaration);
         let mut child = node.child.into_iter();
         let def = child.next().unwrap().unwrap();
@@ -116,6 +124,14 @@ impl Func {
             // 5: Declaration->[FuncDef,Symbol(LeftBrace),Statements,Symbol(RightBrace)];
             Some(s) => {
                 let mut block = Block::new();
+                block.context.extend(
+                    def.paras
+                        .clone()
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, (id, ty))| (id, Pointer::Para(ty, i))),
+                );
+                block.context.extend(func_map.clone());
                 block.insert_statements(s.unwrap());
                 def.body = Some(block);
             }
@@ -379,6 +395,12 @@ impl Block {
                     let statements = child.next().unwrap().unwrap();
                     let condition = self.insert_expression(condition, None);
                     let mut while_block = Block::new();
+                    while_block
+                        .context
+                        .extend(self.context.clone().into_iter().map(|(id, m)| match m {
+                            Pointer::Mem(ty, i) => (id, Pointer::Extern(ty, i)),
+                            _ => (id, m),
+                        }));
                     while_block.insert_statements(statements);
                     // +0: if condition==0 jmp +2
                     // +1: while_block
@@ -399,6 +421,12 @@ impl Block {
                     let _lp = child.next();
                     let condition = child.next().unwrap().unwrap();
                     let mut while_block = Block::new();
+                    while_block
+                        .context
+                        .extend(self.context.clone().into_iter().map(|(id, m)| match m {
+                            Pointer::Mem(ty, i) => (id, Pointer::Extern(ty, i)),
+                            _ => (id, m),
+                        }));
                     while_block.insert_statements(statements);
                     // +0: while_block
                     // +1: if condition==0 jmp 1
@@ -441,6 +469,12 @@ impl Block {
         let mut else_st = child.next().unwrap().unwrap();
         let condition = self.insert_expression(condition, None);
         let mut if_block = Block::new();
+        if_block
+            .context
+            .extend(self.context.clone().into_iter().map(|(id, m)| match m {
+                Pointer::Mem(ty, i) => (id, Pointer::Extern(ty, i)),
+                _ => (id, m),
+            }));
         if_block.insert_statements(if_stats);
         match else_st.child.len() {
             0 => {
@@ -457,6 +491,12 @@ impl Block {
                 let _lb = child.next();
                 let else_stats = child.next().unwrap().unwrap();
                 let mut else_block = Block::new();
+                else_block
+                    .context
+                    .extend(self.context.clone().into_iter().map(|(id, m)| match m {
+                        Pointer::Mem(ty, i) => (id, Pointer::Extern(ty, i)),
+                        _ => (id, m),
+                    }));
                 else_block.insert_statements(else_stats);
                 // if (condition) { if_block } else { else_block }
                 // +0: if condition==0 jmp +2   ;jmp to +3
@@ -494,7 +534,7 @@ impl Block {
         let mut list = child.next().unwrap().unwrap(); // VarDeclList
         loop {
             let mut child = list.child.into_iter();
-            let mut elem = child.next().unwrap().unwrap(); // VarDeclElem
+            let elem = child.next().unwrap().unwrap(); // VarDeclElem
             let mut elem = elem.child.into_iter();
             let ident = match elem.next().unwrap().unwrap_token() {
                 Token::Ident(i) => i,
@@ -576,8 +616,8 @@ impl Block {
             }
             49 => {
                 let (i, a) = self.call(node.child.pop().unwrap().unwrap());
-                let expr = Expression::Func(i, a); //TODO: Type
-                let ptr = self.add_tmp(unimplemented!("get func return type"));
+                let expr = Expression::Func(i.clone(), a); //TODO: Type
+                let ptr = self.add_tmp(self.context.get(&i).expect("Call undeclared function").get_type());
                 self.statement.push(Statement::Assignment(ptr, expr));
                 ptr
             }
@@ -621,7 +661,9 @@ impl Block {
                 };
                 match self.context.get(&ident) {
                     Some(ptr) => *ptr,
-                    None => unimplemented!(),
+                    None => {
+                        fail!("Undeclared variable: {}", ident);
+                    }
                 }
             }
             42...45 => unimplemented!(),
@@ -691,7 +733,8 @@ impl std::fmt::Display for Expression {
 pub enum Pointer {
     Mem(Type, usize),
     Para(Type, usize),
-    Global(Type, usize),
+    Extern(Type, usize),
+    Func(Type, usize),
 }
 
 impl Pointer {
@@ -699,7 +742,8 @@ impl Pointer {
         match self {
             Pointer::Mem(ty, _) => *ty,
             Pointer::Para(ty, _) => *ty,
-            Pointer::Global(ty, _) => *ty,
+            Pointer::Extern(ty, _) => *ty,
+            Pointer::Func(ty, _) => *ty,
         }
     }
 }
@@ -709,7 +753,8 @@ impl std::fmt::Display for Pointer {
         match self {
             Pointer::Mem(ty, i) => write!(f, "({}*)Mem[{}]", ty, i),
             Pointer::Para(ty, i) => write!(f, "({}*)Para[{}]", ty, i),
-            Pointer::Global(ty, i) => write!(f, "({}*)Global[{}]", ty, i),
+            Pointer::Extern(ty, i) => write!(f, "({}*)Extern[{}]", ty, i),
+            Pointer::Func(ty, i) => write!(f, "({}*)Func[{}]", ty, i),
         }
     }
 }
