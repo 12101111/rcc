@@ -6,7 +6,25 @@ fn Program() -> Program {
 }
 fn Declaration(decl: VarDecl, _s: Symbol(Semicolon)) -> Declaration {
     // TODO: calc const block
-    unimplemented!()
+    let vars: Vec<_> = decl
+        .statement
+        .iter()
+        .map(|st| match st {
+            Statement::Assignment(lv, expr) => {
+                let id = match lv {
+                    LValue::Ident(id) => id.clone(),
+                    _ => unimplemented!(),
+                };
+                let val = match expr {
+                    Expression::Constant(val) => val.clone(),
+                    _ => unimplemented!(),
+                };
+                (id, val)
+            }
+            _ => unimplemented!(),
+        })
+        .collect();
+    Declaration::Variables(vars)
 }
 fn Declaration(func: FuncDef, _s: Symbol(Semicolon)) -> Declaration {
     Declaration::Func(func)
@@ -147,7 +165,12 @@ fn Statement(
     stmts: Statements,
     _rb: Symbol(RightBrace),
 ) -> Block {
-    unimplemented!()
+    let c = cond.assign_to_tmp();
+    let mut block = Block::from_expr(Type::Void, cond);
+    block.insert_statement(Statement::Je(c, 2));
+    block.insert_statement(Statement::Block(stmts));
+    block.insert_statement(Statement::Jmp(-(block.statement.len() as isize) - 1));
+    block
 }
 fn Statement(
     _kw: KeyWord(Do),
@@ -160,7 +183,15 @@ fn Statement(
     _rp: Symbol(RightParen),
     _s: Symbol(Semicolon),
 ) -> Block {
-    unimplemented!()
+    let mut block = Block::new();
+    block.insert_statement(Statement::Block(stmts));
+    let mut c = cond.assign_to_tmp();
+    let cond = Block::from_expr(Type::Void, cond);
+    let bump = block.merge(cond);
+    c.bump_tmp(bump);
+    block.insert_statement(Statement::Je(c, 1));
+    block.insert_statement(Statement::Jmp(-(block.statement.len() as isize) - 1));
+    block
 }
 fn Statement(lv: LValue, op: AssignOperator, expr: Expression, _s: Symbol(Semicolon)) -> Block {
     expr.assign(lv);
@@ -315,58 +346,58 @@ fn Expression(_s: Symbol(Sub), e: Elem) -> ExprBlock {
       unimplemented!()
   }*/
 fn Expression(e1: Expression, _s: Symbol(Star), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::Star,e2)
+    e1.bin_op(BinOp::Star, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(Mod), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::Mod,e2)
+    e1.bin_op(BinOp::Mod, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(Divide), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::Divide,e2)
+    e1.bin_op(BinOp::Divide, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(Add), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::Add,e2)
+    e1.bin_op(BinOp::Add, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(Sub), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::Sub,e2)
+    e1.bin_op(BinOp::Sub, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(LeftShift), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::LeftShift,e2)
+    e1.bin_op(BinOp::LeftShift, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(RightShift), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::RightShift,e2)
+    e1.bin_op(BinOp::RightShift, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(Less), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::Less,e2)
+    e1.bin_op(BinOp::Less, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(LessEqual), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::LessEqual,e2)
+    e1.bin_op(BinOp::LessEqual, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(Greater), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::Greater,e2)
+    e1.bin_op(BinOp::Greater, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(GreaterEqual), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::GreaterEqual,e2)
+    e1.bin_op(BinOp::GreaterEqual, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(Equal), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::Equal,e2)
+    e1.bin_op(BinOp::Equal, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(NotEqual), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::NotEqual,e2)
+    e1.bin_op(BinOp::NotEqual, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(And), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::And,e2)
+    e1.bin_op(BinOp::And, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(Xor), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::Xor,e2)
+    e1.bin_op(BinOp::Xor, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(Or), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::Or,e2)
+    e1.bin_op(BinOp::Or, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(LogicalAnd), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::LogicalAnd,e2)
+    e1.bin_op(BinOp::LogicalAnd, e2)
 }
 fn Expression(e1: Expression, _s: Symbol(LogicalOr), e2: Expression) -> ExprBlock {
-    e1.bin_op(BinOp::LogicalOr,e2)
+    e1.bin_op(BinOp::LogicalOr, e2)
 }
 /*fn Expression(
     cond: Expression,

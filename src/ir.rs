@@ -36,7 +36,13 @@ impl Program {
                 self.globals.push((id, val));
             }),
             Declaration::Func(f) => {
-                if self.funcs_map.get(&f.ident).is_some() {
+                if f.body.is_some()
+                    && self.funcs_map.get(&f.ident).is_some()
+                    && self.funcs[*self.funcs_map.get(&f.ident).unwrap()]
+                        .body
+                        .is_some()
+                {
+                    println!("{}", self);
                     fail!("Redeclare function: {}", f.ident);
                 }
                 self.funcs_map.insert(f.ident.clone(), self.funcs.len());
@@ -167,7 +173,7 @@ impl TypedValue {
 #[derive(Debug, Clone)]
 pub struct Block {
     context: HashMap<String, Type>,
-    statement: Vec<Statement>,
+    pub statement: Vec<Statement>,
     tmp: usize,
 }
 
@@ -178,8 +184,8 @@ impl Display for Block {
             writeln!(f, "\t{} : {}", ident, ty)?;
         }
         writeln!(f, "\t[Statements]:")?;
-        for (i,st) in self.statement.iter().enumerate() {
-            writeln!(f, "{}:\t{}", i,st)?;
+        for (i, st) in self.statement.iter().enumerate() {
+            writeln!(f, "{}:\t{}", i, st)?;
         }
         Ok(())
     }
@@ -378,7 +384,7 @@ impl ExprBlock {
         self.statement.extend(block.statement);
         bump
     }
-    pub fn bin_op(mut self, op:BinOp, mut block: ExprBlock)->ExprBlock{
+    pub fn bin_op(mut self, op: BinOp, mut block: ExprBlock) -> ExprBlock {
         let l = self.assign_to_tmp();
         let mut r = block.assign_to_tmp();
         let bump = self.merge(block);
