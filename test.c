@@ -1,36 +1,37 @@
-int ans = 3 * 2 + 1 - 12 / 4;
-void test(int ans2);
-int test2(int ans);
+int global = 7;   //全局变量
+void test(int a); //形参
+int test2(int i); //返回值
 int main(void)
 {
-    int ans2 = 3 * 2 + 1;
-    ans2 = ans;
-    int ans3 = ans2;
-    test(ans2);
-    if (ans2 == 7)
+    int alpha = 1 + 3 * 2; //运算符优先级
+    test(alpha);           //形参/实参
+    if (alpha == 8)
     {
-        return 1+-(1+1);
+        return 1 + -(1 + 1); //单目运算符
     }
-    else if (ans2 == 8)
+    else if (alpha != global)//读全局变量
     {
         return -2;
     }
     else
     {
-        while (ans2 >= 0)
+        do
         {
-            ans2 = ans2 - 1;
+            alpha = alpha + 1;
+        } while (alpha < 10);
+        while (alpha >= alpha - alpha) //>=优先级
+        {
+            alpha = alpha - 1;
         }
-        return test2(ans2);
+        return test2(alpha); //函数返回值
     }
+    return -3;//不可达
 }
-
-void test(int ans2)
+void test(int a)
 {
-    ans2 = 8;
+    a = 8;
 }
-
-int test2(int ans)
+int test2(int i)
 {
-    return ans + 1;
+    return i + 1;
 }

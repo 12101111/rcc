@@ -1,6 +1,6 @@
 [package]
 name = "parser"
-version = "0.1.0"
+version = "0.2.0"
 description = "LR parser for rcc."
 license = "MIT"
 authors = ["韩朴宇 <w12101111@gmail.com>"]

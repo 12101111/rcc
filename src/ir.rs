@@ -100,7 +100,6 @@ pub enum Type {
     Float,
     Double,
     Void,
-    //Struct(Struct),
 }
 
 impl std::fmt::Display for Type {
@@ -178,9 +177,9 @@ impl Display for Block {
         for (ident, ty) in self.context.iter() {
             writeln!(f, "\t{} : {}", ident, ty)?;
         }
-        writeln!(f, "\tStatements:")?;
-        for st in self.statement.iter() {
-            writeln!(f, "\t{}", st)?;
+        writeln!(f, "\t[Statements]:")?;
+        for (i,st) in self.statement.iter().enumerate() {
+            writeln!(f, "{}:\t{}", i,st)?;
         }
         Ok(())
     }
@@ -247,7 +246,7 @@ impl Display for Statement {
             Statement::Assignment(ptr, expr) => write!(f, "{} = {}", ptr, expr),
             Statement::Je(ptr, dst) => write!(f, "if {} == 0 jmp {}", ptr, dst),
             Statement::Jmp(dst) => write!(f, "jmp {}", dst),
-            Statement::Block(b) => write!(f, "\rBlock:{}End block", b),
+            Statement::Block(b) => write!(f, "\nBlock:\n{}End block", b),
         }
     }
 }
