@@ -1,11 +1,21 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
-pub struct Lexer<'code> {
+pub struct TokenStream<'code> {
     chars: Peekable<Chars<'code>>,
     line: usize,
     col: usize,
+    pos: usize,
 }
+
+#[derive(Clone,Debug, PartialEq)]
+pub struct TokenItem {
+    pub token: Token,
+    pub line: usize,
+    pub col: usize,
+    pub pos: usize,
+}
+
 macro_rules! token_enum {
     ($class:ident { $($name:ident($type:ty)),*}) => {
         #[derive(Clone,Debug, PartialEq)]
@@ -174,12 +184,13 @@ token! {
     }
 }
 
-impl<'code> Lexer<'code> {
-    pub fn new(code: &'code str) -> Lexer<'code> {
-        Lexer {
+impl<'code> TokenStream<'code> {
+    pub fn new(code: &'code str) -> TokenStream<'code> {
+        TokenStream {
             chars: code.chars().peekable(),
             line: 1,
             col: 1,
+            pos: 0,
         }
     }
     #[cfg(test)]
@@ -194,6 +205,7 @@ impl<'code> Lexer<'code> {
     }
     fn next_char_or_none(&mut self) -> Option<char> {
         if let Some(c) = self.chars.next() {
+            self.pos += 1;
             if c == '\n' {
                 self.line += 1;
                 self.col = 0;
@@ -207,6 +219,7 @@ impl<'code> Lexer<'code> {
     }
     fn next_char(&mut self, mag: &str) -> char {
         if let Some(c) = self.chars.next() {
+            self.pos += 1;
             if c == '\n' {
                 self.line += 1;
                 self.col = 0;
@@ -290,18 +303,22 @@ impl<'code> Lexer<'code> {
             _ => self.fail("Unknown escape sequence"),
         }
     }
-}
-
-impl<'a> Iterator for Lexer<'a> {
-    type Item = (Token, usize, usize);
-    fn next(&mut self) -> Option<Self::Item> {
+    fn make_token(&self, token: Token) -> TokenItem {
+        TokenItem {
+            token,
+            line: self.line,
+            col: self.col,
+            pos: self.pos,
+        }
+    }
+    fn next_token(&mut self) -> Option<Token> {
         if let Some(c) = self.next_not_whitespace_char() {
             match c {
                 '"' => {
                     let mut s = String::new();
                     while let Some(c) = self.next_char_or_none() {
                         match c {
-                            '"' => return Some((Token::Literal(s), self.line, self.col)),
+                            '"' => return Some(Token::Literal(s)),
                             '\\' => {
                                 let next = self.next_char("Unclosed string");
                                 s.push(self.map_escape(next) as u8 as char);
@@ -321,7 +338,7 @@ impl<'a> Iterator for Lexer<'a> {
                         c @ _ => c as u8,
                     };
                     if self.next_char("Unclosed character") == '\'' {
-                        Some((Token::Constant(Constant::Char(c)), self.line, self.col))
+                        Some(Token::Constant(Constant::Char(c)))
                     } else {
                         self.fail("more than one character in char")
                     }
@@ -336,11 +353,7 @@ impl<'a> Iterator for Lexer<'a> {
                                     num.push(self.next_char(""))
                                 }
                                 if let Ok(int) = u64::from_str_radix(&num, 16) {
-                                    Some((
-                                        Token::Constant(Constant::UInt(int)),
-                                        self.line,
-                                        self.col,
-                                    ))
+                                    Some(Token::Constant(Constant::UInt(int)))
                                 } else {
                                     self.fail(&format!("Invalid number: 0x{}", num));
                                 }
@@ -351,11 +364,7 @@ impl<'a> Iterator for Lexer<'a> {
                                     num.push(self.next_char(""))
                                 }
                                 if let Ok(int) = u64::from_str_radix(&num, 8) {
-                                    Some((
-                                        Token::Constant(Constant::UInt(int)),
-                                        self.line,
-                                        self.col,
-                                    ))
+                                    Some(Token::Constant(Constant::UInt(int)))
                                 } else {
                                     self.fail(&format!("Invalid number: 0{}", num));
                                 }
@@ -367,16 +376,14 @@ impl<'a> Iterator for Lexer<'a> {
                                 while self.next_is_digits() {
                                     num.push(self.next_char(""))
                                 }
-                                Some((
-                                    Token::Constant(Constant::Float(num.parse::<f64>().unwrap())),
-                                    self.line,
-                                    self.col,
-                                ))
+                                Some(Token::Constant(Constant::Float(
+                                    num.parse::<f64>().unwrap(),
+                                )))
                             }
-                            _ => Some((Token::Constant(Constant::Int(0)), self.line, self.col)),
+                            _ => Some(Token::Constant(Constant::Int(0))),
                         }
                     } else {
-                        Some((Token::Constant(Constant::Int(0)), self.line, self.col))
+                        Some(Token::Constant(Constant::Int(0)))
                     }
                 }
                 '1'...'9' => {
@@ -390,17 +397,11 @@ impl<'a> Iterator for Lexer<'a> {
                         while self.next_is_digits() {
                             num.push(self.next_char(""))
                         }
-                        Some((
-                            Token::Constant(Constant::Float(num.parse::<f64>().unwrap())),
-                            self.line,
-                            self.col,
-                        ))
+                        Some(Token::Constant(Constant::Float(
+                            num.parse::<f64>().unwrap(),
+                        )))
                     } else {
-                        Some((
-                            Token::Constant(Constant::Int(num.parse::<i64>().unwrap())),
-                            self.line,
-                            self.col,
-                        ))
+                        Some(Token::Constant(Constant::Int(num.parse::<i64>().unwrap())))
                     }
                 }
                 'A'...'Z' | 'a'...'z' | '_' => {
@@ -410,9 +411,9 @@ impl<'a> Iterator for Lexer<'a> {
                         ident.push(self.next_char(""));
                     }
                     if let Some(keyword) = KeyWord::map(&ident) {
-                        Some((Token::KeyWord(keyword), self.line, self.col))
+                        Some(Token::KeyWord(keyword))
                     } else {
-                        Some((Token::Ident(ident), self.line, self.col))
+                        Some(Token::Ident(ident))
                     }
                 }
                 _ => {
@@ -463,20 +464,12 @@ impl<'a> Iterator for Lexer<'a> {
                                         let mut comment = String::new();
                                         while let Some(c) = self.next_char_or_none() {
                                             if c == '\n' {
-                                                return Some((
-                                                    Token::Comment(comment),
-                                                    self.line,
-                                                    self.col,
-                                                ));
+                                                return Some(Token::Comment(comment));
                                             } else {
                                                 comment.push(c);
                                             }
                                         }
-                                        return Some((
-                                            Token::Comment(comment),
-                                            self.line,
-                                            self.col,
-                                        ));
+                                        return Some(Token::Comment(comment));
                                     }
                                     '*' => {
                                         let _ = self.next_char("");
@@ -485,11 +478,7 @@ impl<'a> Iterator for Lexer<'a> {
                                             if c == '*' {
                                                 if self.chars.peek() == Some(&'/') {
                                                     let _ = self.next_char("");
-                                                    return Some((
-                                                        Token::Comment(comment),
-                                                        self.line,
-                                                        self.col,
-                                                    ));
+                                                    return Some(Token::Comment(comment));
                                                 }
                                             }
                                             comment.push(c)
@@ -503,16 +492,25 @@ impl<'a> Iterator for Lexer<'a> {
                         }
                         _ => self.fail(&format!("invalid character: {}", c)),
                     }
-                    Some((
-                        Token::Symbol(Symbol::map(&sym).unwrap()),
-                        self.line,
-                        self.col,
-                    ))
+                    Some(Token::Symbol(Symbol::map(&sym).unwrap()))
                 }
             }
         } else {
             None
         }
+    }
+}
+
+impl<'a> Iterator for TokenStream<'a> {
+    type Item = TokenItem;
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(token) = self.next_token() {
+            match token {
+                Token::Comment(_) => continue,
+                _ => return Some(self.make_token(token)),
+            }
+        }
+        None
     }
 }
 
@@ -543,7 +541,7 @@ mod tests {
         ($id:ident,$raw:expr,$lex:expr) => {
             #[test]
             fn $id() {
-                assert_eq!(Lexer::new($raw).next().unwrap().0, $lex);
+                assert_eq!(Lexer::new($raw).next().unwrap().token, $lex);
             }
         };
     }

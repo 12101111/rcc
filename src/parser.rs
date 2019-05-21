@@ -1,8 +1,8 @@
 use crate::ir::*;
 use crate::lexer::KeyWord::*;
-use crate::lexer::Lexer;
 use crate::lexer::Symbol::*;
 use crate::lexer::Token::{self, *};
+use crate::lexer::{TokenItem, TokenStream};
 use parser::parser;
 use std::collections::{HashMap, VecDeque};
 use std::io::Write;
@@ -71,54 +71,49 @@ impl std::fmt::Display for Node {
     }
 }
 
+fn fail(msg: &str, input: &TokenItem) -> !{
+    let msg = format!(
+        "\nSyntax Error: {}\nInput: {}, Line:{}, Col:{}\n",
+        msg, input.token, input.line, input.col
+        );
+    print_fail(msg)
+}
+
 #[cfg(test)]
-pub fn fail(msg: &str, line: usize, col: usize) -> ! {
-    panic!("\nSyntax Error: {}\nLine:{} ,Col:{}\n", msg, line, col);
+pub fn print_fail(msg: String) -> ! {
+    panic!("{}",msg);
 }
 
 #[cfg(not(test))]
-pub fn fail(msg: &str, line: usize, col: usize) -> ! {
+pub fn print_fail(msg: String) -> ! {
     println!();
-    eprintln!("Syntax Error: {}\nLine:{} ,Col:{}", msg, line, col);
+    eprintln!("{}",msg);
     std::process::exit(1)
 }
 
-pub fn parse(lexer: Lexer) -> Ast {
+pub fn parse(ts: TokenStream) -> Ast {
     let mut states = Vec::new();
     states.push(0);
     let mut ast = Vec::new();
-    // Ignore Comment
-    let mut lex = lexer
-        .filter(|t| {
-            if let (Token::Comment(_), _, _) = t {
-                false
-            } else {
-                true
-            }
-        })
-        .peekable();
-    let (mut line, mut col) = (0, 0);
-    let mut input = String::new();
+    let mut ts = ts.peekable();
     loop {
         print!("{:?}\t", states);
         print!("input:");
-        let i = lex
+        let i = ts
             .peek()
-            .map(|(i, l, c)| {
-                line = *l;
-                col = *c;
-                input = format!("{}", i);
-                print!(" {}\t", i);
-                match_token(i).unwrap_or_else(|| {
-                    fail(&format!("no match token for this input:{}", i), *l, *c)
-                })
-            })
+            .map(
+                |t| {
+                    print!(" {}\t", &t.token);
+                    match_token(&t.token)
+                        .unwrap_or_else(|| fail("no match token for this input", &t))
+                },
+            )
             .unwrap_or(TERMINAL_NUM);
         match ACTIONS[*states.last().unwrap()][i] {
             Action::Shift(i) => {
                 println!("S{}", i);
                 states.push(i);
-                ast.push(Ast::T(lex.next().unwrap().0))
+                ast.push(Ast::T(ts.next().unwrap().token))
             }
             Action::Reduce(rule) => {
                 print!("R{}", rule);
@@ -141,7 +136,12 @@ pub fn parse(lexer: Lexer) -> Ast {
                 println!("\tAccept");
                 return ast.pop().unwrap();
             }
-            Action::Error => fail(&format!("Unexpected Token {}", input), line, col),
+            Action::Error => {
+                match ts.next(){
+                    Some(t)=> fail("Unexpected Token", &t),
+                    None=> print_fail("Unexpected end of file".to_string())
+                }
+            },
         }
     }
 }

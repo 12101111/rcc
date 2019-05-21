@@ -3,7 +3,7 @@ mod ir;
 mod lexer;
 mod parser;
 mod preprocessor;
-use crate::lexer::Lexer;
+use crate::lexer::TokenStream;
 use crate::parser::{parse, print_ast};
 use crate::preprocessor::preprocess;
 fn main() {
@@ -13,8 +13,7 @@ fn main() {
     println!("{}", code);
     let code = preprocess(code);
     println!("After preprocess:\n{}", code);
-    let lexer = Lexer::new(&code);
-    let ast = parse(lexer);
+    let ast = parse(TokenStream::new(&code));
     print_ast(&ast, "ast.dot").unwrap();
     let program = ast.unwrap_program();
     println!("Program:\n{}", program);
